@@ -123,6 +123,12 @@ socket.on('game_over', data => {
 
 socket.on('error', data => showToast(data.msg, true));
 
+socket.on('bot_chat', data => {
+  const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
+  const icon = icons[data.role] || '🤖';
+  logEvent(`${icon} [${data.name}]: ${data.msg}`, 'bot');
+});
+
 // ── Render ────────────────────────────────────────────────────
 function renderAll() {
   renderHealth();
@@ -145,61 +151,157 @@ function renderHearts(id, hp, max) {
   }
 }
 
+// Node grid positions in the CSS grid (0-indexed [row, col]):
+//   North arm : row 0, cols 1-6  → CSS grid-row 1, grid-col 2-7
+//   West arm  : rows 1-6, col 0  → CSS grid-row 2-7, grid-col 1
+//   East arm  : rows 1-6, col 7  → CSS grid-row 2-7, grid-col 8
+//   South arm : row 7, cols 1-6  → CSS grid-row 8, grid-col 2-7
+const NODE_GRID = {
+  north: (i) => ({ row: 1,   col: i + 2 }),  // i=0..5 → col 2-7
+  south: (i) => ({ row: 8,   col: i + 2 }),
+  west:  (i) => ({ row: i + 2, col: 1 }),     // i=0..5 → row 2-7
+  east:  (i) => ({ row: i + 2, col: 8 }),
+};
+
 function renderBoard() {
   const container = document.getElementById('eng-board');
   container.innerHTML = '';
 
-  DIRECTIONS.forEach(dir => {
-    const col = document.createElement('div');
-    col.className = 'dir-col' + (dir === activeDir ? ' active-dir' : '');
-    col.id = `dir-col-${dir}`;
+  // Wrap in a centred flex div
+  const wrap = document.createElement('div');
+  wrap.className = 'eng-board-wrap';
 
+  // Outer CSS grid (8 cols × 8 rows)
+  const grid = document.createElement('div');
+  grid.className = 'eng-cross';
+  grid.id = 'eng-cross';
+
+  // Helper: place an element at a CSS grid position
+  function place(el, row, col) {
+    el.style.gridRow    = row;
+    el.style.gridColumn = col;
+    grid.appendChild(el);
+  }
+
+  // ── Corner / direction labels ──
+  const CORNER_LABELS = [
+    { row:1, col:1, text:'←W', dir:'west'  },
+    { row:1, col:8, text:'E→', dir:'east'  },
+    { row:8, col:1, text:'←W', dir:'west'  },
+    { row:8, col:8, text:'E→', dir:'east'  },
+  ];
+  // North header row (row 0 in grid = row 1 in CSS)
+  const nHdr = document.createElement('div');
+  nHdr.style.gridRow = 1; nHdr.style.gridColumn = '2 / 8';
+  nHdr.className = 'dir-corner' + (activeDir==='north' ? ' active-arm' : '');
+  nHdr.textContent = '↑ NORTH';
+  grid.appendChild(nHdr);
+
+  // South header row
+  const sHdr = document.createElement('div');
+  sHdr.style.gridRow = 8; sHdr.style.gridColumn = '2 / 8';
+  sHdr.className = 'dir-corner' + (activeDir==='south' ? ' active-arm' : '');
+  sHdr.textContent = '↓ SOUTH';
+  grid.appendChild(sHdr);
+
+  CORNER_LABELS.forEach(({row, col, text, dir}) => {
     const lbl = document.createElement('div');
-    lbl.className = 'dir-label';
-    lbl.textContent = `${DIR_ARROWS[dir]} ${dir.toUpperCase()}`;
-    col.appendChild(lbl);
+    lbl.className = 'dir-corner' + (activeDir===dir ? ' active-arm' : '');
+    lbl.textContent = text;
+    place(lbl, row, col);
+  });
 
-    const layout = ENG_LAYOUT[dir];
+  // ── Centre area ──
+  const center = document.createElement('div');
+  center.className = 'eng-center';
+  center.style.gridRow    = '2 / 8';
+  center.style.gridColumn = '2 / 8';
+
+  const rose = document.createElement('div');
+  rose.className = 'compass-rose';
+  rose.textContent = '🧭';
+
+  const clabel = document.createElement('div');
+  clabel.className = 'center-label';
+  clabel.textContent = 'ENGINEERING';
+
+  const cstatus = document.createElement('div');
+  cstatus.className = 'center-status';
+  cstatus.id = 'center-status-text';
+  cstatus.textContent = activeDir
+    ? `Mark a node in ${activeDir.toUpperCase()} →`
+    : 'Waiting…';
+
+  // Circuit key inside centre
+  const ckey = document.createElement('div');
+  ckey.className = 'circuit-legend';
+  [['c1','#f97316'],['c2','#06b6d4'],['c3','#ec4899']].forEach(([cls, col]) => {
+    const d = document.createElement('div');
+    d.className = 'circ-dot';
+    d.style.background = col;
+    d.style.borderRadius = '2px';
+    d.title = cls.toUpperCase();
+    ckey.appendChild(d);
+  });
+
+  center.appendChild(rose);
+  center.appendChild(clabel);
+  center.appendChild(cstatus);
+  center.appendChild(ckey);
+  grid.appendChild(center);
+
+  // ── Arm nodes ──
+  DIRECTIONS.forEach(dir => {
+    const layout     = ENG_LAYOUT[dir];
     const serverNodes = board && board[dir];
 
-    // Group: circuit nodes first, then divider, then non-circuit
-    const circuitNodes    = layout.filter(n => n.circuit !== null);
-    const nonCircuitNodes = layout.filter(n => n.circuit === null);
-
-    [...circuitNodes, {divider:true}, ...nonCircuitNodes].forEach((def, i) => {
-      if (def.divider) {
-        const hr = document.createElement('hr');
-        hr.className = 'node-divider';
-        col.appendChild(hr);
-        return;
-      }
-
-      // Find actual index in full layout
-      const idx = layout.indexOf(def);
-      const marked = serverNodes ? serverNodes[idx].marked : false;
+    layout.forEach((def, idx) => {
+      const gp      = NODE_GRID[dir](idx);
+      const marked  = serverNodes ? serverNodes[idx].marked : false;
+      const isActive = (dir === activeDir);
 
       const node = document.createElement('div');
-      node.className = `eng-node ${def.color}${marked ? ' marked' : ''}`;
-      node.title     = `${def.color}${def.circuit ? ' (circuit '+def.circuit+')' : ''}`;
+      node.id = `node-${dir}-${idx}`;
+      node.className = 'eng-node ' + def.color
+        + (def.circuit ? ` circuit-${def.circuit}` : '')
+        + (marked       ? ' marked'     : '')
+        + (isActive     ? ' active-arm' : '');
+
+      node.title = `${dir.toUpperCase()} [${idx}] — ${def.color}`
+        + (def.circuit ? ` · Circuit ${def.circuit}` : '');
 
       if (def.color === 'radiation') node.textContent = '☢';
 
+      // Circuit badge
       if (def.circuit !== null) {
-        const tag = document.createElement('div');
-        tag.className   = 'circuit-tag';
-        tag.textContent = 'C'+def.circuit;
-        node.appendChild(tag);
+        const badge = document.createElement('div');
+        badge.className = `circuit-badge c${def.circuit}`;
+        badge.textContent = 'C' + def.circuit;
+        node.appendChild(badge);
       }
 
-      if (canMark && dir === activeDir && !marked) {
+      // Clickable only when it's the active direction and not yet marked
+      if (canMark && isActive && !marked) {
         node.classList.add('clickable');
         node.addEventListener('click', () => markNode(dir, idx));
       }
 
-      col.appendChild(node);
+      place(node, gp.row, gp.col);
     });
+  });
 
-    container.appendChild(col);
+  wrap.appendChild(grid);
+  container.appendChild(wrap);
+}
+
+function flashDir(dir) {
+  const layout = ENG_LAYOUT[dir];
+  layout.forEach((_, idx) => {
+    const node = document.getElementById(`node-${dir}-${idx}`);
+    if (node) {
+      node.classList.add('damage-flash');
+      setTimeout(() => node.classList.remove('damage-flash'), 900);
+    }
   });
 }
 
@@ -218,14 +320,6 @@ function updateStatus() {
   } else {
     el.textContent = 'Waiting for captain to move…';
     el.style.color = 'var(--text-muted)';
-  }
-}
-
-function flashDir(dir) {
-  const col = document.getElementById(`dir-col-${dir}`);
-  if (col) {
-    col.classList.add('damage-flash');
-    setTimeout(() => col.classList.remove('damage-flash'), 900);
   }
 }
 
