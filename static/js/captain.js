@@ -20,6 +20,9 @@ let enemyHealth    = 4;
 let isMyTurn       = false;
 let hasMoved       = false;
 let isSurfaced     = false;
+let engineerDone   = false;  // engineer has marked this turn
+let firstMateDone  = false;  // first mate has charged this turn
+let lastDirection  = null;   // direction of last move (null = no directional move needed)
 
 // Targeting modes
 let targetMode     = null;   // 'torpedo' | 'mine' | null
@@ -58,18 +61,22 @@ socket.on('sub_placed', data => {
 });
 
 socket.on('moved_self', data => {
-  myPosition = {row: data.row, col: data.col};
-  myTrail    = data.trail.map(([r,c]) => ({row:r, col:c}));
-  hasMoved   = true;
+  myPosition    = {row: data.row, col: data.col};
+  myTrail       = data.trail.map(([r,c]) => ({row:r, col:c}));
+  hasMoved      = true;
+  lastDirection = data.direction || null;
   renderTrail();
   renderSubMarker();
   updateEndTurnBtn();
 });
 
 socket.on('turn_start', data => {
-  isMyTurn  = (data.team === MY_TEAM);
-  hasMoved  = false;
-  isSurfaced = false;
+  isMyTurn      = (data.team === MY_TEAM);
+  hasMoved      = false;
+  isSurfaced    = false;
+  engineerDone  = false;
+  firstMateDone = false;
+  lastDirection = null;
   updateLock();
   updateEndTurnBtn();
   if (isMyTurn) {
@@ -191,6 +198,12 @@ socket.on('error', data => {
   showToast(data.msg, true);
 });
 
+socket.on('bot_chat', data => {
+  const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
+  const icon = icons[data.role] || '🤖';
+  logEvent(`${icon} [${data.name}]: ${data.msg}`, 'bot');
+});
+
 // ── Update from full game state ──────────────────────────────
 function updateFromState(state) {
   if (!state || !state.submarines) return;
@@ -215,8 +228,12 @@ function updateFromState(state) {
     enemyHealth = enemySub.health;
   }
 
-  isMyTurn  = (state.current_team === MY_TEAM);
-  hasMoved  = (state.turn_state && state.turn_state.moved);
+  isMyTurn      = (state.current_team === MY_TEAM);
+  const ts      = state.turn_state || {};
+  hasMoved      = ts.moved      || false;
+  engineerDone  = ts.engineer_done  || false;
+  firstMateDone = ts.first_mate_done || false;
+  lastDirection = ts.direction  || null;
 
   // Handle phase-specific UI first so updateLock() sees correct state
   if (state.phase === 'placement' && !placementDone) {
@@ -496,9 +513,14 @@ function showDiveBtn(show) {
 
 function doEndTurn() {
   if (!isMyTurn || !hasMoved) return;
+  const needWait = (lastDirection !== null);
+  if (needWait && (!engineerDone || !firstMateDone)) return;
   socket.emit('captain_end_turn', {game_id: GAME_ID, name: MY_NAME});
-  isMyTurn = false;
-  hasMoved = false;
+  isMyTurn      = false;
+  hasMoved      = false;
+  engineerDone  = false;
+  firstMateDone = false;
+  lastDirection = null;
   updateLock();
   updateEndTurnBtn();
 }
@@ -658,8 +680,27 @@ function updateLock() {
 }
 
 function updateEndTurnBtn() {
-  const btn = document.getElementById('btn-end-turn');
-  btn.disabled = !(isMyTurn && hasMoved);
+  const btn      = document.getElementById('btn-end-turn');
+  const needWait = (lastDirection !== null);   // directional move → must wait
+  const canEnd   = isMyTurn && hasMoved
+                   && (!needWait || engineerDone)
+                   && (!needWait || firstMateDone);
+  btn.disabled = !canEnd;
+  updateRoleWaitStatus();
+}
+
+function updateRoleWaitStatus() {
+  const el = document.getElementById('role-wait-status');
+  if (!el) return;
+  if (!isMyTurn || !hasMoved || lastDirection === null) {
+    el.innerHTML = '';
+    return;
+  }
+  const engIcon  = engineerDone  ? '✅' : '⏳';
+  const fmIcon   = firstMateDone ? '✅' : '⏳';
+  el.innerHTML =
+    `<span class="wait-label">${engIcon} Engineer</span>` +
+    `<span class="wait-label">${fmIcon} First Mate</span>`;
 }
 
 function logEvent(msg, cls) {

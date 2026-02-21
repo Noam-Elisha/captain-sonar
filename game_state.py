@@ -619,6 +619,13 @@ def can_end_turn(game, team):
         return False, "Must move or surface before ending turn"
     if ts["waiting_for"]:
         return False, "Waiting for a response"
+    # When a directional move was made, engineer AND first mate must act first.
+    # (Surface and stealth auto-set both flags, so this only blocks normal moves.)
+    if ts["direction"] is not None:
+        if not ts["engineer_done"]:
+            return False, "Waiting for engineer to mark a node"
+        if not ts["first_mate_done"]:
+            return False, "Waiting for first mate to charge a system"
     return True, None
 
 

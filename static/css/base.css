@@ -49,7 +49,8 @@ h1, h2, h3 { line-height: 1.2; }
   height: 100vh;
   overflow: hidden;
 }
-.map-panel  { flex: 1; overflow: auto; position: relative; }
+.map-panel  { flex: 1; overflow: auto; position: relative;
+  display: flex; align-items: center; justify-content: center; }
 .ctrl-panel {
   width: 280px; min-width: 240px; max-width: 340px;
   background: var(--bg-panel);
@@ -102,25 +103,31 @@ h1, h2, h3 { line-height: 1.2; }
   display: flex; align-items: center; justify-content: center;
 }
 .lock-overlay p {
-  font-size: 1.5rem; font-weight: 700; color: var(--text-muted);
+  font-size: 1.5rem; font-weight: 700; color: var(--team-primary, var(--text-muted));
   letter-spacing: .1em;
 }
 .lock-overlay.hidden { display: none; }
 
 /* ── Placement overlay ── */
+/* Slim top banner — does NOT cover the map so you can click to place the sub */
 .placement-overlay {
-  position: fixed; inset: 0; z-index: 800;
-  background: rgba(0,0,0,.65);
-  display: flex; align-items: center; justify-content: center;
-  pointer-events: none;  /* let map clicks pass through to the grid */
+  position: fixed; top: 0; left: 0; right: 0; z-index: 800;
+  display: flex; justify-content: center;
+  pointer-events: none;  /* let all map clicks pass through */
 }
 .placement-card {
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 16px; padding: 2rem 2.5rem; text-align: center;
+  background: rgba(14,22,40,.93);
+  border: 1px solid var(--accent);
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+  padding: .55rem 1.5rem;
+  display: flex; align-items: center; gap: 1rem;
   pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,.5);
 }
-.placement-card h2 { font-size: 1.4rem; color: var(--accent); margin-bottom: .5rem; }
-.placement-card .placement-sub { color: var(--text-muted); font-size: .85rem; }
+.placement-card h2 { font-size: .95rem; color: var(--accent); margin: 0; white-space: nowrap; }
+.placement-card p  { font-size: .8rem; color: var(--text-muted); margin: 0; }
+.placement-card .placement-sub { display: none; }
 
 /* ── Modals ── */
 .modal {
@@ -166,9 +173,21 @@ h1, h2, h3 { line-height: 1.2; }
 .event-log .log-entry { padding: .15rem 0; border-bottom: 1px solid #ffffff08; }
 .event-log .log-entry.highlight { color: var(--accent); }
 .event-log .log-entry.danger    { color: var(--red-light); }
+.event-log .log-entry.bot       { color: #a78bfa; font-style: italic; }
+
+/* ── Bot badge ── */
+.bot-badge {
+  display: inline-block; font-size: .65rem; background: #3b1f6e;
+  color: #a78bfa; border-radius: 6px; padding: .1rem .4rem;
+  margin-left: .4rem; font-weight: 600; vertical-align: middle;
+}
 
 /* ── Map grid shared ── */
-.map-wrapper { position: relative; padding: 1rem; display: inline-block; }
+.map-wrapper {
+  position: relative; padding: 1rem; display: inline-block;
+  border: 2px solid var(--team-primary, var(--border));
+  border-radius: 8px;
+}
 .map-grid { position: relative; display: grid; user-select: none; }
 
 /* Sector boxes */
@@ -198,12 +217,20 @@ h1, h2, h3 { line-height: 1.2; }
 /* ── Buttons ── */
 .btn-end-turn {
   width: 100%; padding: .75rem; border: none; border-radius: 8px;
-  background: var(--accent); color: #fff;
+  background: var(--team-primary, var(--accent)); color: #fff;
   font-size: .95rem; font-weight: 700; cursor: pointer;
   letter-spacing: .05em; transition: opacity .2s;
 }
 .btn-end-turn:disabled { opacity: .35; cursor: not-allowed; }
 .btn-end-turn:not(:disabled):hover { opacity: .85; }
+
+/* ── Role wait status (captain view) ── */
+.role-wait-status {
+  display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .4rem;
+}
+.wait-label {
+  font-size: .72rem; color: var(--text-muted); letter-spacing: .03em;
+}
 
 /* ── Notes ── */
 .notes-area {
