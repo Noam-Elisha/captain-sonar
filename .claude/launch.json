@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "captain-sonar",
+      "runtimeExecutable": "D:/OneDrive/1Documents/Claude Code/captain-sonar/venv/Scripts/python.exe",
+      "runtimeArgs": ["server.py"],
+      "port": 5000,
+      "autoPort": true
+    }
+  ]
+}
