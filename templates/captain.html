@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Captain – Captain Sonar</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <link rel="stylesheet" href="/static/css/captain.css"/>
+</head>
+<body class="role-captain team-{{ team }}">
+<!-- Turn lock overlay -->
+<div id="lock-overlay" class="lock-overlay hidden">
+  <p id="lock-msg">Waiting for other team…</p>
+</div>
+
+<!-- Placement overlay -->
+<div id="placement-overlay" class="placement-overlay">
+  <div class="placement-card">
+    <h2>⚓ Place Your Submarine</h2>
+    <p>Click any water tile to deploy</p>
+    <p class="placement-sub">Avoid islands &amp; sector boundaries are just guides</p>
+  </div>
+</div>
+
+<!-- Sonar modal -->
+<div id="sonar-modal" class="modal hidden">
+  <div class="modal-card">
+    <h3>📡 Sonar Ping</h3>
+    <p>Choose one Row, one Column, and one Sector to ask about the enemy:</p>
+    <label>Row (1–{{ map_rows }})<input type="number" id="sonar-row" min="1" max="{{ map_rows }}" value="1"/></label>
+    <label>Column (1–{{ map_cols }})<input type="number" id="sonar-col" min="1" max="{{ map_cols }}" value="1"/></label>
+    <label>Sector (1–9)<input type="number" id="sonar-sector" min="1" max="9" value="1"/></label>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeSonar()">Cancel</button>
+      <button class="btn-confirm" onclick="submitSonar()">Ping!</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drone modal -->
+<div id="drone-modal" class="modal hidden">
+  <div class="modal-card">
+    <h3>🛸 Drone Scan</h3>
+    <p>Which sector do you think the enemy is in?</p>
+    <div class="sector-grid" id="drone-sectors"></div>
+    <div class="modal-btns"><button class="btn-cancel" onclick="closeDrone()">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Stealth modal -->
+<div id="stealth-modal" class="modal hidden">
+  <div class="modal-card">
+    <h3>👻 Stealth Move</h3>
+    <p>Choose up to 4 moves silently. Enemy won't hear your direction.</p>
+    <div class="stealth-moves" id="stealth-move-list"></div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.8rem 0;">
+      <button class="move-add-btn" onclick="addStealthDir('north')">↑ N</button>
+      <button class="move-add-btn" onclick="addStealthDir('south')">↓ S</button>
+      <button class="move-add-btn" onclick="addStealthDir('west')">← W</button>
+      <button class="move-add-btn" onclick="addStealthDir('east')">→ E</button>
+      <button class="move-add-btn" onclick="addStealthDir('')">Stay (0)</button>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeStealth()">Cancel</button>
+      <button class="btn-confirm" onclick="submitStealth()">Execute</button>
+    </div>
+  </div>
+</div>
+
+<!-- Result toast -->
+<div id="result-toast" class="result-toast hidden"></div>
+
+<div class="app-layout">
+  <!-- LEFT: map -->
+  <div class="map-panel">
+    <div class="map-wrapper">
+      <div id="map-grid" class="map-grid"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: controls -->
+  <div class="ctrl-panel">
+    <div class="role-header team-{{ team }}">
+      <span class="role-title">🎖 CAPTAIN</span>
+      <span class="team-badge">{{ team | upper }} TEAM</span>
+    </div>
+
+    <!-- Health -->
+    <div class="panel-section">
+      <div class="section-label">OWN HEALTH</div>
+      <div class="health-row" id="own-health"></div>
+      <div class="section-label" style="margin-top:.6rem">ENEMY HEALTH</div>
+      <div class="health-row" id="enemy-health"></div>
+    </div>
+
+    <!-- Systems -->
+    <div class="panel-section">
+      <div class="section-label">WEAPONS &amp; SYSTEMS</div>
+      <div class="systems-grid" id="systems-grid"></div>
+    </div>
+
+    <!-- Movement -->
+    <div class="panel-section" id="move-panel">
+      <div class="section-label">MOVEMENT</div>
+      <div class="compass">
+        <button class="compass-btn north" onclick="doMove('north')" id="btn-north">↑ N</button>
+        <div class="compass-middle">
+          <button class="compass-btn west"  onclick="doMove('west')" id="btn-west">← W</button>
+          <button class="compass-btn surface" onclick="doSurface()" id="btn-surface">⚠ SURFACE</button>
+          <button class="compass-btn east"  onclick="doMove('east')" id="btn-east">E →</button>
+        </div>
+        <button class="compass-btn south" onclick="doMove('south')" id="btn-south">↓ S</button>
+      </div>
+      <button class="btn-dive hidden" id="btn-dive" onclick="doDive()">🤿 DIVE</button>
+    </div>
+
+    <!-- Mine detonation list -->
+    <div class="panel-section" id="mine-det-panel" style="display:none">
+      <div class="section-label">MINES PLACED</div>
+      <div id="mine-list"></div>
+    </div>
+
+    <!-- End turn -->
+    <div class="panel-section">
+      <button class="btn-end-turn" id="btn-end-turn" onclick="doEndTurn()" disabled>
+        End Turn ▶
+      </button>
+    </div>
+
+    <!-- Event log -->
+    <div class="panel-section">
+      <div class="section-label">EVENT LOG</div>
+      <div class="event-log" id="event-log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const GAME_ID    = "{{ game_id }}";
+  const MY_NAME    = "{{ player_name }}";
+  const MY_TEAM    = "{{ team }}";
+  const MAP_ROWS   = {{ map_rows }};
+  const MAP_COLS   = {{ map_cols }};
+  const SECTOR_SZ  = {{ sector_size }};
+  const ISLANDS    = {{ islands | tojson }};
+  const COL_LABELS = {{ col_labels | tojson }};
+</script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/static/js/captain.js"></script>
+</body>
+</html>

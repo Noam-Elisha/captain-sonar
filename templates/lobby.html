@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Lobby – Captain Sonar</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <style>
+    body { background:var(--bg-deep); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:2rem 1rem; }
+    h1 { color:var(--accent); letter-spacing:.15em; margin:0 0 .25rem; }
+    .game-code { color:var(--text-muted); font-size:.9rem; margin-bottom:2rem; }
+    .game-code span { color:var(--text); font-weight:700; letter-spacing:.2em; font-size:1.1rem; }
+
+    .lobby-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; width:100%; max-width:820px; }
+    @media(max-width:600px){ .lobby-grid{grid-template-columns:1fr;} }
+
+    .team-panel {
+      background:var(--bg-panel); border:1px solid var(--border); border-radius:12px; padding:1.2rem;
+    }
+    .team-panel.blue { border-top:3px solid var(--blue); }
+    .team-panel.red  { border-top:3px solid var(--red); }
+    .team-panel h2 { margin:0 0 1rem; font-size:.95rem; letter-spacing:.1em; }
+    .team-panel.blue h2 { color:var(--blue-light); }
+    .team-panel.red h2  { color:var(--red-light); }
+
+    .player-slot {
+      display:flex; align-items:center; gap:.6rem;
+      padding:.5rem .6rem; border-radius:8px; margin-bottom:.4rem;
+      background:rgba(255,255,255,.04);
+    }
+    .player-slot .role-badge {
+      font-size:.7rem; padding:.15rem .45rem; border-radius:4px;
+      background:var(--bg-deep); border:1px solid var(--border);
+      color:var(--text-muted); letter-spacing:.05em; white-space:nowrap;
+    }
+    .player-slot .ready-dot {
+      width:8px; height:8px; border-radius:50%; background:var(--text-muted); margin-left:auto;
+    }
+    .player-slot .ready-dot.ready { background:#4ade80; }
+    .player-slot .player-name { font-size:.9rem; flex:1; }
+
+    .controls { background:var(--bg-panel); border:1px solid var(--border); border-radius:12px;
+                padding:1.5rem; max-width:820px; width:100%; margin-top:1.5rem; }
+    .controls h2 { color:var(--accent); letter-spacing:.1em; margin:0 0 1rem; font-size:.95rem; }
+
+    .role-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:.6rem; margin-bottom:1rem; }
+    .role-btn {
+      padding:.6rem; border:1px solid var(--border); border-radius:8px; background:transparent;
+      color:var(--text-muted); cursor:pointer; font-size:.85rem; letter-spacing:.04em;
+      transition:all .2s;
+    }
+    .role-btn:hover  { border-color:var(--accent); color:var(--text); }
+    .role-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+    .role-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+    .team-row { display:flex; gap:.6rem; margin-bottom:1rem; }
+    .team-btn {
+      flex:1; padding:.6rem; border-radius:8px; border:1px solid var(--border);
+      background:transparent; color:var(--text-muted); cursor:pointer; font-size:.85rem;
+      transition:all .2s;
+    }
+    .team-btn.blue.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+    .team-btn.red.active  { background:var(--red);  border-color:var(--red);  color:#fff; }
+
+    .action-row { display:flex; gap:.6rem; }
+    .btn-ready  { flex:1; padding:.7rem; border-radius:8px; border:none; font-size:.95rem; font-weight:600; cursor:pointer; }
+    .btn-ready.not-ready { background:var(--accent); color:#fff; }
+    .btn-ready.is-ready  { background:#4ade80; color:#052e16; }
+    .btn-start { flex:1; padding:.7rem; border-radius:8px; border:none; font-size:.95rem;
+                 font-weight:600; cursor:pointer; background:#7c3aed; color:#fff; }
+    .btn-start:disabled { opacity:.4; cursor:not-allowed; }
+
+    .status-bar { color:var(--text-muted); font-size:.8rem; text-align:center; margin-top:1rem; min-height:1em; }
+  </style>
+</head>
+<body>
+  <h1>⚓ LOBBY</h1>
+  <p class="game-code">Game Code: <span id="code-display">{{ game_id }}</span></p>
+
+  <div class="lobby-grid">
+    <div class="team-panel blue">
+      <h2>🔵 BLUE TEAM</h2>
+      <div id="blue-slots"></div>
+    </div>
+    <div class="team-panel red">
+      <h2>🔴 RED TEAM</h2>
+      <div id="red-slots"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <h2>YOUR SETTINGS</h2>
+    <div class="team-row">
+      <button class="team-btn blue" id="btn-blue" onclick="chooseTeam('blue')">🔵 Blue Team</button>
+      <button class="team-btn red"  id="btn-red"  onclick="chooseTeam('red')">🔴 Red Team</button>
+    </div>
+    <p style="color:var(--text-muted);font-size:.78rem;margin:.1rem 0 .6rem;">CHOOSE ROLE</p>
+    <div class="role-grid" id="role-grid">
+      <button class="role-btn" id="role-captain"        onclick="chooseRole('captain')">🎖 Captain</button>
+      <button class="role-btn" id="role-first_mate"     onclick="chooseRole('first_mate')">⚙ First Mate</button>
+      <button class="role-btn" id="role-engineer"       onclick="chooseRole('engineer')">🔧 Engineer</button>
+      <button class="role-btn" id="role-radio_operator" onclick="chooseRole('radio_operator')">📡 Radio Operator</button>
+    </div>
+    <div class="action-row">
+      <button class="btn-ready not-ready" id="btn-ready" onclick="toggleReady()">Ready Up</button>
+      <button class="btn-start" id="btn-start" onclick="startGame()" disabled>Start Game</button>
+    </div>
+    <p class="status-bar" id="status-bar">Waiting for players…</p>
+  </div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  const GAME_ID   = "{{ game_id }}";
+  const MY_NAME   = "{{ player_name }}";
+  const ROLE_LABELS = {
+    captain: '🎖 Captain', first_mate: '⚙ First Mate',
+    engineer: '🔧 Engineer', radio_operator: '📡 Radio Op'
+  };
+
+  let myTeam = 'blue', myRole = '', myReady = false;
+  let isHost = false;
+  let lobbyPlayers = [];
+
+  const socket = io();
+  socket.on('connect', () => {
+    socket.emit('join_room', {game_id: GAME_ID});
+    socket.emit('join_game', {game_id: GAME_ID, name: MY_NAME});
+  });
+
+  socket.on('lobby_state', data => {
+    lobbyPlayers = data.players || [];
+    isHost = (data.host === MY_NAME);
+    renderLobby();
+  });
+
+  socket.on('game_started', data => {
+    window.location.href = `/play?game_id=${GAME_ID}&name=${encodeURIComponent(MY_NAME)}`;
+  });
+
+  socket.on('error', d => {
+    document.getElementById('status-bar').textContent = '⚠ ' + d.msg;
+    document.getElementById('status-bar').style.color = '#f87171';
+  });
+
+  function renderLobby() {
+    const blue = lobbyPlayers.filter(p => p.team === 'blue');
+    const red  = lobbyPlayers.filter(p => p.team === 'red');
+    renderTeam('blue-slots', blue);
+    renderTeam('red-slots', red);
+
+    // Update my local state from server data
+    const me = lobbyPlayers.find(p => p.name === MY_NAME);
+    if (me) {
+      myTeam  = me.team  || 'blue';
+      myRole  = me.role  || '';
+      myReady = me.ready || false;
+    }
+
+    // Team buttons
+    document.getElementById('btn-blue').classList.toggle('active', myTeam==='blue');
+    document.getElementById('btn-red').classList.toggle('active',  myTeam==='red');
+
+    // Role buttons
+    const takenOnMyTeam = lobbyPlayers
+      .filter(p => p.team === myTeam && p.name !== MY_NAME)
+      .map(p => p.role);
+
+    ['captain','first_mate','engineer','radio_operator'].forEach(r => {
+      const btn = document.getElementById('role-'+r);
+      btn.classList.toggle('active', myRole === r);
+      btn.disabled = (r !== myRole && takenOnMyTeam.includes(r));
+    });
+
+    // Ready button
+    const readyBtn = document.getElementById('btn-ready');
+    readyBtn.textContent  = myReady ? '✓ Ready!' : 'Ready Up';
+    readyBtn.className    = 'btn-ready ' + (myReady ? 'is-ready' : 'not-ready');
+    readyBtn.disabled     = !myRole;
+
+    // Start button (host only, needs all players with roles)
+    const allReady = lobbyPlayers.length >= 2 && lobbyPlayers.every(p => p.ready);
+    document.getElementById('btn-start').disabled = !(isHost && allReady);
+    if (!isHost) document.getElementById('btn-start').style.display = 'none';
+
+    // Status
+    const notReady = lobbyPlayers.filter(p => !p.ready);
+    if (notReady.length > 0) {
+      document.getElementById('status-bar').textContent =
+        `Waiting for: ${notReady.map(p=>p.name).join(', ')}`;
+      document.getElementById('status-bar').style.color = '';
+    } else if (lobbyPlayers.length >= 2) {
+      document.getElementById('status-bar').textContent = 'All ready! Host can start the game.';
+      document.getElementById('status-bar').style.color = '#4ade80';
+    }
+  }
+
+  function renderTeam(containerId, players) {
+    const el = document.getElementById(containerId);
+    el.innerHTML = '';
+    if (players.length === 0) {
+      el.innerHTML = '<p style="color:var(--text-muted);font-size:.8rem;padding:.4rem">No players yet</p>';
+      return;
+    }
+    players.forEach(p => {
+      const slot = document.createElement('div');
+      slot.className = 'player-slot';
+      slot.innerHTML = `
+        <span class="player-name">${p.name}${p.name===MY_NAME?' <em style="opacity:.5">(you)</em>':''}</span>
+        <span class="role-badge">${ROLE_LABELS[p.role] || 'No role'}</span>
+        <span class="ready-dot ${p.ready?'ready':''}"></span>
+      `;
+      el.appendChild(slot);
+    });
+  }
+
+  function chooseTeam(team) {
+    if (myTeam === team) return;
+    socket.emit('set_team', {game_id: GAME_ID, name: MY_NAME, team});
+  }
+
+  function chooseRole(role) {
+    const newRole = (myRole === role) ? '' : role;
+    socket.emit('set_role', {game_id: GAME_ID, name: MY_NAME, role: newRole});
+  }
+
+  function toggleReady() {
+    socket.emit('player_ready', {game_id: GAME_ID, name: MY_NAME, ready: !myReady});
+  }
+
+  function startGame() {
+    socket.emit('start_game', {game_id: GAME_ID, name: MY_NAME});
+  }
+</script>
+</body>
+</html>

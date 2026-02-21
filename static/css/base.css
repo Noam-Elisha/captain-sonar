@@ -1,0 +1,238 @@
+/* ============================================================
+   Captain Sonar — Base CSS (Dark Naval Theme)
+   ============================================================ */
+
+/* ── CSS Variables ── */
+:root {
+  --bg-deep:    #0a0e1a;
+  --bg-panel:   #111827;
+  --bg-input:   #1e2535;
+  --border:     #1f2d45;
+  --text:       #e2e8f0;
+  --text-muted: #64748b;
+  --accent:     #0ea5e9;        /* sky-500 */
+  --accent-dim: #075985;
+
+  --blue:       #2563eb;
+  --blue-light: #60a5fa;
+  --red:        #dc2626;
+  --red-light:  #f87171;
+
+  /* node colours */
+  --col-yellow:    #eab308;
+  --col-red:       #ef4444;
+  --col-green:     #22c55e;
+  --col-radiation: #a855f7;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg-deep);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Team colour overrides ── */
+body.team-blue { --team-primary: var(--blue); --team-light: var(--blue-light); }
+body.team-red  { --team-primary: var(--red);  --team-light: var(--red-light); }
+
+/* ── Typography ── */
+h1, h2, h3 { line-height: 1.2; }
+
+/* ── App layout ── */
+.app-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+.map-panel  { flex: 1; overflow: auto; position: relative; }
+.ctrl-panel {
+  width: 280px; min-width: 240px; max-width: 340px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+}
+.ctrl-panel.full-width { width: 100%; max-width: none; border-left: none; }
+
+/* ── Role header ── */
+.role-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.role-header.team-blue { background: linear-gradient(135deg, #1e3a8a22, transparent); border-top: 3px solid var(--blue); }
+.role-header.team-red  { background: linear-gradient(135deg, #7f1d1d22, transparent); border-top: 3px solid var(--red); }
+.role-title  { font-weight: 700; letter-spacing: .08em; font-size: .95rem; }
+.team-badge  {
+  font-size: .7rem; letter-spacing: .1em; padding: .2rem .6rem;
+  border-radius: 999px; font-weight: 600;
+}
+.team-blue .team-badge { background: var(--blue);    color: #fff; }
+.team-red  .team-badge { background: var(--red);     color: #fff; }
+
+/* ── Panel sections ── */
+.panel-section {
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.panel-section.two-col { display: flex; gap: 1rem; }
+.panel-section.two-col > div { flex: 1; }
+.section-label {
+  font-size: .7rem; letter-spacing: .1em; color: var(--text-muted);
+  text-transform: uppercase; margin-bottom: .4rem;
+}
+
+/* ── Health display ── */
+.health-row { display: flex; gap: .3rem; }
+.health-heart {
+  font-size: 1.2rem;
+  transition: opacity .3s;
+}
+.health-heart.empty { opacity: .2; }
+
+/* ── Lock overlay ── */
+.lock-overlay {
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(0,0,0,.7);
+  display: flex; align-items: center; justify-content: center;
+}
+.lock-overlay p {
+  font-size: 1.5rem; font-weight: 700; color: var(--text-muted);
+  letter-spacing: .1em;
+}
+.lock-overlay.hidden { display: none; }
+
+/* ── Placement overlay ── */
+.placement-overlay {
+  position: fixed; inset: 0; z-index: 800;
+  background: rgba(0,0,0,.65);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;  /* let map clicks pass through to the grid */
+}
+.placement-card {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 16px; padding: 2rem 2.5rem; text-align: center;
+  pointer-events: none;
+}
+.placement-card h2 { font-size: 1.4rem; color: var(--accent); margin-bottom: .5rem; }
+.placement-card .placement-sub { color: var(--text-muted); font-size: .85rem; }
+
+/* ── Modals ── */
+.modal {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.75);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal.hidden { display: none; }
+.modal-card {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 16px; padding: 1.5rem 2rem; min-width: 300px; max-width: 420px;
+}
+.modal-card h3 { color: var(--accent); margin-bottom: .75rem; font-size: 1.1rem; }
+.modal-card label { display: block; margin-bottom: .75rem; color: var(--text-muted); font-size: .85rem; }
+.modal-card input[type=number] {
+  display: block; width: 100%; margin-top: .2rem;
+  background: var(--bg-input); border: 1px solid var(--border);
+  color: var(--text); padding: .5rem .8rem; border-radius: 8px;
+  font-size: 1rem;
+}
+.modal-btns { display: flex; gap: .6rem; margin-top: 1rem; }
+.btn-confirm { flex:1; padding:.65rem; border:none; border-radius:8px; font-size:.95rem; font-weight:600; cursor:pointer; background:var(--accent); color:#fff; }
+.btn-cancel  { flex:1; padding:.65rem; border:1px solid var(--border); border-radius:8px; font-size:.95rem; cursor:pointer; background:transparent; color:var(--text-muted); }
+
+/* ── Result toast ── */
+.result-toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 2000;
+  background: var(--bg-panel); border: 1px solid var(--accent);
+  border-radius: 12px; padding: 1rem 1.5rem;
+  font-size: .95rem; color: var(--text);
+  box-shadow: 0 4px 20px rgba(0,0,0,.5);
+  transition: opacity .4s;
+}
+.result-toast.hidden { display: none; }
+.result-toast.error  { border-color: var(--red); }
+
+/* ── Event log ── */
+.event-log {
+  height: 120px; overflow-y: auto;
+  font-size: .78rem; color: var(--text-muted);
+  background: var(--bg-deep); border-radius: 6px; padding: .4rem .6rem;
+}
+.event-log .log-entry { padding: .15rem 0; border-bottom: 1px solid #ffffff08; }
+.event-log .log-entry.highlight { color: var(--accent); }
+.event-log .log-entry.danger    { color: var(--red-light); }
+
+/* ── Map grid shared ── */
+.map-wrapper { position: relative; padding: 1rem; display: inline-block; }
+.map-grid { position: relative; display: grid; user-select: none; }
+
+/* Sector boxes */
+.sector-box {
+  position: absolute; border: 2px solid rgba(255,255,255,.12);
+  border-radius: 4px; pointer-events: none;
+}
+.sector-label {
+  position: absolute; top: 2px; left: 4px;
+  font-size: .6rem; color: rgba(255,255,255,.25); font-weight: 700;
+}
+
+/* Island overlay */
+.island-cell {
+  background: linear-gradient(135deg, #2d3748, #1a2234) !important;
+  border-radius: 3px !important;
+  cursor: not-allowed !important;
+}
+
+/* Column / row labels */
+.map-label {
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem; color: var(--text-muted); font-weight: 600;
+  letter-spacing: .04em;
+}
+
+/* ── Buttons ── */
+.btn-end-turn {
+  width: 100%; padding: .75rem; border: none; border-radius: 8px;
+  background: var(--accent); color: #fff;
+  font-size: .95rem; font-weight: 700; cursor: pointer;
+  letter-spacing: .05em; transition: opacity .2s;
+}
+.btn-end-turn:disabled { opacity: .35; cursor: not-allowed; }
+.btn-end-turn:not(:disabled):hover { opacity: .85; }
+
+/* ── Notes ── */
+.notes-area {
+  width: 100%; min-height: 100px; resize: vertical;
+  background: var(--bg-deep); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text);
+  padding: .6rem .8rem; font-size: .85rem; font-family: inherit;
+}
+
+/* ── Stealth modal ── */
+.stealth-moves { display: flex; gap: .4rem; flex-wrap: wrap; min-height: 2rem; }
+.stealth-tag {
+  background: var(--accent-dim); color: var(--accent); border-radius: 6px;
+  padding: .25rem .6rem; font-size: .8rem; cursor: pointer;
+}
+.move-add-btn {
+  padding: .4rem .8rem; border: 1px solid var(--border); border-radius: 8px;
+  background: transparent; color: var(--text); cursor: pointer; font-size: .85rem;
+}
+.move-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Sector grid (drone modal) ── */
+.sector-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: .4rem; margin: .8rem 0;
+}
+.sector-grid button {
+  padding: .6rem; border: 1px solid var(--border); border-radius: 8px;
+  background: transparent; color: var(--text); cursor: pointer; font-size: .95rem;
+  transition: all .2s;
+}
+.sector-grid button:hover,
+.sector-grid button.active { background: var(--accent); border-color: var(--accent); color: #fff; }

@@ -1,0 +1,52 @@
+/* ── Radio Operator styles ── */
+
+.ro-toolbar {
+  display: flex; gap: .5rem; align-items: center;
+  padding: .5rem .75rem;
+  background: var(--bg-panel); border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.tool-btn {
+  padding: .4rem .8rem; border: 1px solid var(--border); border-radius: 8px;
+  background: transparent; color: var(--text-muted); cursor: pointer;
+  font-size: .82rem; transition: all .2s;
+}
+.tool-btn:hover  { border-color: var(--accent); color: var(--text); }
+.tool-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ro-hint { margin-left: auto; font-size: .78rem; color: var(--text-muted); font-style: italic; }
+
+/* Map wrapper for overlay */
+.map-wrapper { position: relative; display: inline-block; padding: 1rem; }
+
+/* Drawing canvas sits on top of grid */
+.draw-canvas {
+  position: absolute; left: 1rem; top: 1rem;
+  pointer-events: auto; z-index: 20; cursor: crosshair;
+}
+
+/* Map cell (read-only for RO) */
+.map-cell {
+  width: 32px; height: 32px;
+  border: 1px solid #1e2d40; border-radius: 3px;
+  background: #0d1b2e; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Movement log */
+.movement-log {
+  max-height: 200px; overflow-y: auto;
+  background: var(--bg-deep); border-radius: 6px; padding: .4rem .6rem;
+  font-size: .82rem;
+}
+.move-entry {
+  display: flex; gap: .5rem; padding: .18rem 0;
+  border-bottom: 1px solid #ffffff08;
+}
+.move-entry .move-n { font-size: .7rem; color: var(--text-muted); }
+.move-entry .move-d { font-weight: 600; }
+.move-entry.north .move-d { color: #38bdf8; }
+.move-entry.south .move-d { color: #f87171; }
+.move-entry.east  .move-d { color: #4ade80; }
+.move-entry.west  .move-d { color: #fbbf24; }
+.move-entry.stealth .move-d { color: var(--col-radiation); }
+.move-entry.surface .move-d { color: #f97316; }

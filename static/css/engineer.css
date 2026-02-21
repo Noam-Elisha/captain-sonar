@@ -1,0 +1,123 @@
+/* ── Engineer styles ── */
+
+.status-label {
+  padding: .5rem 1rem;
+  color: var(--accent);
+  font-size: .85rem;
+  font-style: italic;
+}
+
+/* Engineering board: 4 direction columns */
+.eng-board {
+  display: flex;
+  gap: .5rem;
+  padding: .75rem 1rem;
+  overflow-x: auto;
+  justify-content: center;
+}
+
+.dir-col {
+  flex: 1;
+  min-width: 90px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .6rem .5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .4rem;
+}
+.dir-col.active-dir {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(14,165,233,.3);
+}
+.dir-label {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--text-muted);
+  text-align: center;
+  padding-bottom: .3rem;
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  text-align: center;
+}
+
+/* Nodes */
+.eng-node {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg-deep);
+  cursor: default;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem; font-weight: 700;
+  transition: all .2s;
+  position: relative;
+}
+.eng-node.clickable {
+  cursor: pointer;
+  border-color: var(--node-color);
+  box-shadow: 0 0 6px var(--node-color);
+}
+.eng-node.clickable:hover {
+  background: var(--node-color);
+  color: #000;
+  transform: scale(1.12);
+}
+.eng-node.marked {
+  background: var(--node-color);
+  border-color: var(--node-color);
+  color: #000;
+}
+.eng-node.marked::after {
+  content: '✕';
+  font-size: .75rem;
+  font-weight: 900;
+  color: rgba(0,0,0,.6);
+}
+
+/* Colours */
+.eng-node.yellow    { --node-color: var(--col-yellow); }
+.eng-node.red       { --node-color: var(--col-red); }
+.eng-node.green     { --node-color: var(--col-green); }
+.eng-node.radiation { --node-color: var(--col-radiation); font-size: .9rem; }
+
+/* Circuit indicator */
+.circuit-tag {
+  font-size: .55rem; font-weight: 700; letter-spacing: .06em;
+  padding: .05rem .3rem; border-radius: 4px;
+  position: absolute; top: -6px; right: -6px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+/* Divider between circuit and non-circuit nodes */
+.node-divider {
+  width: 80%; border: none; border-top: 1px dashed var(--border);
+  margin: .1rem 0;
+}
+
+/* Damage flash */
+@keyframes damageFlash {
+  0%, 100% { border-color: var(--red); background: transparent; }
+  40%       { border-color: var(--red); background: rgba(220,38,38,.25); }
+}
+.dir-col.damage-flash { animation: damageFlash .7s ease; }
+
+/* Legend */
+.legend {
+  display: flex; gap: 1rem; align-items: center;
+  padding: .5rem 1rem; flex-wrap: wrap;
+  font-size: .75rem; color: var(--text-muted);
+}
+.legend .dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  margin-right: .25rem;
+}
+.legend .dot.yellow    { background: var(--col-yellow); }
+.legend .dot.red       { background: var(--col-red); }
+.legend .dot.green     { background: var(--col-green); }
+.legend .dot.radiation { background: var(--col-radiation); font-size: .7rem; }

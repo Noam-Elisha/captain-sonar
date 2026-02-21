@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Radio Operator – Captain Sonar</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <link rel="stylesheet" href="/static/css/radio_operator.css"/>
+</head>
+<body class="role-radio_operator team-{{ team }}">
+<div id="result-toast" class="result-toast hidden"></div>
+
+<div class="app-layout">
+  <!-- Map tracking panel -->
+  <div class="map-panel">
+    <div class="ro-toolbar">
+      <button class="tool-btn active" id="tool-draw"  onclick="setTool('draw')">✏ Draw</button>
+      <button class="tool-btn"        id="tool-erase" onclick="setTool('erase')">⌫ Erase</button>
+      <button class="tool-btn"        id="tool-clear" onclick="clearAll()">✕ Clear</button>
+      <span class="ro-hint" id="ro-hint">Listening for enemy movements…</span>
+    </div>
+    <div class="map-wrapper">
+      <div id="map-grid" class="map-grid"></div>
+      <canvas id="draw-canvas" class="draw-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Right panel: log + notes -->
+  <div class="ctrl-panel">
+    <div class="role-header team-{{ team }}">
+      <span class="role-title">📡 RADIO OP</span>
+      <span class="team-badge">{{ team | upper }} TEAM</span>
+    </div>
+
+    <div class="panel-section two-col">
+      <div>
+        <div class="section-label">OWN HEALTH</div>
+        <div class="health-row" id="own-health"></div>
+      </div>
+      <div>
+        <div class="section-label">ENEMY HEALTH</div>
+        <div class="health-row" id="enemy-health"></div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">ENEMY MOVEMENTS</div>
+      <div class="movement-log" id="movement-log"></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">NOTES</div>
+      <textarea class="notes-area" placeholder="Write deductions here…"></textarea>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">EVENT LOG</div>
+      <div class="event-log" id="event-log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const GAME_ID    = "{{ game_id }}";
+  const MY_NAME    = "{{ player_name }}";
+  const MY_TEAM    = "{{ team }}";
+  const MAP_ROWS   = {{ map_rows }};
+  const MAP_COLS   = {{ map_cols }};
+  const SECTOR_SZ  = {{ sector_size }};
+  const ISLANDS    = {{ islands | tojson }};
+  const COL_LABELS = {{ col_labels | tojson }};
+</script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/static/js/radio_operator.js"></script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+/* ── Captain role styles ── */
+
+/* Map grid cell */
+.map-cell {
+  width: 32px; height: 32px;
+  border: 1px solid #1e2d40;
+  border-radius: 3px;
+  background: #0d1b2e;
+  cursor: pointer;
+  position: relative;
+  transition: background .15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.map-cell:hover:not(.island-cell):not(.no-hover) { background: #1a3050; }
+.map-cell.placement-hover { background: #1a4070 !important; }
+
+/* Trail line */
+.trail-line {
+  position: absolute; background: var(--team-light, #60a5fa);
+  pointer-events: none; z-index: 5; opacity: .7;
+  border-radius: 3px;
+}
+
+/* Submarine marker */
+.sub-marker {
+  position: absolute; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; z-index: 10; pointer-events: none;
+}
+.sub-dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--team-light);
+  background: var(--team-primary);
+  box-shadow: 0 0 8px var(--team-light);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 6px var(--team-light); }
+  50%       { box-shadow: 0 0 16px var(--team-light); }
+}
+
+/* Mine marker */
+.mine-cell { background: #2d1515 !important; }
+.mine-icon { font-size: .8rem; line-height: 1; }
+
+/* Torpedo target highlight */
+.torpedo-target { background: #2d1a00 !important; cursor: crosshair !important; }
+.torpedo-target:hover { background: #5c2d00 !important; }
+.mine-target { background: #2d1515 !important; cursor: crosshair !important; }
+.mine-target:hover { background: #5c1515 !important; }
+
+/* Explosion ripple */
+@keyframes explode {
+  0%   { transform: scale(.5); opacity: 1; }
+  100% { transform: scale(3);  opacity: 0; }
+}
+.explosion-ring {
+  position: absolute; width: 100%; height: 100%;
+  border-radius: 50%; border: 3px solid #f97316;
+  pointer-events: none; z-index: 50;
+  animation: explode .6s ease-out forwards;
+}
+
+/* Compass */
+.compass {
+  display: flex; flex-direction: column; align-items: center; gap: .3rem;
+}
+.compass-middle { display: flex; gap: .3rem; align-items: center; }
+.compass-btn {
+  padding: .5rem .9rem; border-radius: 8px; border: 1px solid var(--border);
+  font-size: .85rem; font-weight: 600; cursor: pointer;
+  transition: all .2s; background: var(--bg-input); color: var(--text);
+}
+.compass-btn.north, .compass-btn.south, .compass-btn.west, .compass-btn.east {
+  background: #0d2240; border-color: var(--blue);
+}
+.compass-btn.north:hover, .compass-btn.south:hover,
+.compass-btn.west:hover,  .compass-btn.east:hover  {
+  background: var(--blue); color: #fff;
+}
+.compass-btn.surface {
+  background: #5c1a00; border-color: #f97316; color: #f97316;
+  font-size: .75rem; padding: .4rem .6rem;
+}
+.compass-btn.surface:hover { background: #f97316; color: #fff; }
+.compass-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+.btn-dive {
+  margin-top: .5rem; width: 100%; padding: .6rem;
+  background: #1a3a1a; border: 1px solid #4ade80; color: #4ade80;
+  border-radius: 8px; font-weight: 600; cursor: pointer; font-size: .9rem;
+}
+.btn-dive:hover { background: #4ade80; color: #052e16; }
+.btn-dive.hidden { display: none; }
+
+/* Systems grid */
+.systems-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: .4rem;
+}
+.sys-btn {
+  padding: .45rem .5rem; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-input); color: var(--text-muted);
+  font-size: .8rem; cursor: pointer; text-align: left;
+  transition: all .2s; white-space: nowrap;
+}
+.sys-btn .sys-name  { font-weight: 600; display: block; font-size: .78rem; color: var(--text); }
+.sys-btn .sys-charge { font-size: .65rem; color: var(--text-muted); }
+.sys-btn.ready      { border-color: var(--accent); background: #051d30; }
+.sys-btn.ready .sys-name  { color: var(--accent); }
+.sys-btn.ready .sys-charge { color: var(--accent); }
+.sys-btn:disabled   { opacity: .35; cursor: not-allowed; }
+
+/* Mine list */
+#mine-list { display: flex; flex-direction: column; gap: .3rem; }
+.mine-entry {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--bg-input); border-radius: 6px; padding: .35rem .7rem;
+  font-size: .8rem;
+}
+.mine-det-btn {
+  padding: .2rem .5rem; border: 1px solid var(--red); border-radius: 6px;
+  background: transparent; color: var(--red); cursor: pointer; font-size: .75rem;
+}
+.mine-det-btn:hover { background: var(--red); color: #fff; }

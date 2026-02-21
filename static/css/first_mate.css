@@ -1,0 +1,68 @@
+/* ── First Mate styles ── */
+
+.systems-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: .75rem;
+  padding: .75rem 1rem;
+}
+
+.sys-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  transition: border-color .2s;
+  position: relative;
+}
+.sys-card.can-charge { border-color: var(--accent); box-shadow: 0 0 8px rgba(14,165,233,.2); }
+.sys-card.is-ready   { border-color: #4ade80; }
+.sys-card.is-charged { animation: readyFlash .4s ease; }
+
+@keyframes readyFlash {
+  0%, 100% { border-color: #4ade80; }
+  50%       { border-color: #fff; box-shadow: 0 0 16px #4ade80; }
+}
+
+.sys-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: .6rem;
+}
+.sys-card-name { font-weight: 700; font-size: .95rem; letter-spacing: .05em; }
+.sys-card-cost { font-size: .75rem; color: var(--text-muted); }
+
+/* Charge dots */
+.charge-dots { display: flex; gap: .35rem; margin-bottom: .8rem; }
+.c-dot {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg-deep);
+  transition: all .25s;
+}
+.c-dot.filled { border-color: var(--dot-color, var(--accent)); background: var(--dot-color, var(--accent)); }
+
+/* Dot colours per system */
+.sys-torpedo .c-dot.filled, .sys-mine .c-dot.filled  { --dot-color: var(--col-red); }
+.sys-sonar .c-dot.filled,   .sys-drone .c-dot.filled  { --dot-color: var(--col-green); }
+.sys-stealth .c-dot.filled                              { --dot-color: var(--col-yellow); }
+
+.sys-ready-badge {
+  display: inline-block; background: #4ade80; color: #052e16;
+  font-size: .7rem; font-weight: 700; padding: .1rem .5rem;
+  border-radius: 999px; margin-bottom: .4rem;
+}
+.sys-ready-badge.hidden { display: none; }
+
+.btn-charge {
+  width: 100%; padding: .55rem; border: none; border-radius: 8px;
+  font-size: .85rem; font-weight: 600; cursor: pointer;
+  background: var(--accent); color: #fff;
+  transition: opacity .2s;
+}
+.btn-charge:disabled { opacity: .35; cursor: not-allowed; }
+.btn-charge:not(:disabled):hover { opacity: .85; }
+
+/* System color accent borders */
+.sys-torpedo, .sys-mine   { border-left: 3px solid var(--col-red); }
+.sys-sonar, .sys-drone    { border-left: 3px solid var(--col-green); }
+.sys-stealth              { border-left: 3px solid var(--col-yellow); }

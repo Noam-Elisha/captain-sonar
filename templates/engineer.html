@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Engineer – Captain Sonar</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <link rel="stylesheet" href="/static/css/engineer.css"/>
+</head>
+<body class="role-engineer team-{{ team }}">
+<div id="result-toast" class="result-toast hidden"></div>
+
+<div class="app-layout">
+  <div class="ctrl-panel full-width">
+    <div class="role-header team-{{ team }}">
+      <span class="role-title">🔧 ENGINEER</span>
+      <span class="team-badge">{{ team | upper }} TEAM</span>
+    </div>
+
+    <!-- Health -->
+    <div class="panel-section two-col">
+      <div>
+        <div class="section-label">OWN HEALTH</div>
+        <div class="health-row" id="own-health"></div>
+      </div>
+      <div>
+        <div class="section-label">ENEMY HEALTH</div>
+        <div class="health-row" id="enemy-health"></div>
+      </div>
+    </div>
+
+    <div class="section-label status-label" id="eng-status">
+      Waiting for captain to move…
+    </div>
+
+    <!-- Engineering board: 4 direction columns -->
+    <div class="eng-board" id="eng-board">
+      <!-- Rendered by JS -->
+    </div>
+
+    <div class="legend">
+      <span class="dot yellow"></span>Stealth
+      <span class="dot red"></span>Torpedo/Mine
+      <span class="dot green"></span>Sonar/Drone
+      <span class="dot radiation">☢</span>Radiation
+    </div>
+
+    <div class="panel-section">
+      <div class="section-label">EVENT LOG</div>
+      <div class="event-log" id="event-log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const GAME_ID = "{{ game_id }}";
+  const MY_NAME = "{{ player_name }}";
+  const MY_TEAM = "{{ team }}";
+</script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/static/js/engineer.js"></script>
+</body>
+</html>
