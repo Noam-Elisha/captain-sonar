@@ -72,11 +72,11 @@
   transition: all .2s; background: var(--bg-input); color: var(--text);
 }
 .compass-btn.north, .compass-btn.south, .compass-btn.west, .compass-btn.east {
-  background: #0d2240; border-color: var(--blue);
+  background: #0d2240; border-color: var(--team-primary, var(--blue));
 }
 .compass-btn.north:hover, .compass-btn.south:hover,
 .compass-btn.west:hover,  .compass-btn.east:hover  {
-  background: var(--blue); color: #fff;
+  background: var(--team-primary, var(--blue)); color: #fff;
 }
 .compass-btn.surface {
   background: #5c1a00; border-color: #f97316; color: #f97316;
@@ -105,9 +105,9 @@
 }
 .sys-btn .sys-name  { font-weight: 600; display: block; font-size: .78rem; color: var(--text); }
 .sys-btn .sys-charge { font-size: .65rem; color: var(--text-muted); }
-.sys-btn.ready      { border-color: var(--accent); background: #051d30; }
-.sys-btn.ready .sys-name  { color: var(--accent); }
-.sys-btn.ready .sys-charge { color: var(--accent); }
+.sys-btn.ready      { border-color: var(--team-primary, var(--accent)); background: #051d30; }
+.sys-btn.ready .sys-name  { color: var(--team-primary, var(--accent)); }
+.sys-btn.ready .sys-charge { color: var(--team-primary, var(--accent)); }
 .sys-btn:disabled   { opacity: .35; cursor: not-allowed; }
 
 /* Mine list */

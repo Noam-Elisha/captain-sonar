@@ -92,6 +92,12 @@ socket.on('game_over', data => {
 
 socket.on('error', data => showToast(data.msg, true));
 
+socket.on('bot_chat', data => {
+  const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
+  const icon = icons[data.role] || '🤖';
+  logEvent(`${icon} [${data.name}]: ${data.msg}`, 'bot');
+});
+
 // ── Map Rendering ─────────────────────────────────────────────
 function renderMap() {
   const grid = document.getElementById('map-grid');

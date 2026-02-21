@@ -17,8 +17,8 @@
     .team-panel {
       background:var(--bg-panel); border:1px solid var(--border); border-radius:12px; padding:1.2rem;
     }
-    .team-panel.blue { border-top:3px solid var(--blue); }
-    .team-panel.red  { border-top:3px solid var(--red); }
+    .team-panel.blue { border-top:3px solid var(--blue); background:rgba(37,99,235,.04); }
+    .team-panel.red  { border-top:3px solid var(--red);  background:rgba(220,38,38,.04); }
     .team-panel h2 { margin:0 0 1rem; font-size:.95rem; letter-spacing:.1em; }
     .team-panel.blue h2 { color:var(--blue-light); }
     .team-panel.red h2  { color:var(--red-light); }
@@ -28,6 +28,7 @@
       padding:.5rem .6rem; border-radius:8px; margin-bottom:.4rem;
       background:rgba(255,255,255,.04);
     }
+    .player-slot.bot-slot { background:rgba(167,139,250,.06); border:1px solid #3b1f6e44; }
     .player-slot .role-badge {
       font-size:.7rem; padding:.15rem .45rem; border-radius:4px;
       background:var(--bg-deep); border:1px solid var(--border);
@@ -38,6 +39,29 @@
     }
     .player-slot .ready-dot.ready { background:#4ade80; }
     .player-slot .player-name { font-size:.9rem; flex:1; }
+    .btn-remove-bot {
+      padding:.15rem .45rem; border:1px solid #7c3aed44; border-radius:5px;
+      background:transparent; color:#a78bfa; cursor:pointer; font-size:.7rem;
+    }
+    .btn-remove-bot:hover { background:#3b1f6e; }
+
+    /* Add-bot row */
+    .add-bot-section {
+      margin-top:.75rem; padding-top:.75rem; border-top:1px dashed var(--border);
+    }
+    .add-bot-label {
+      font-size:.68rem; letter-spacing:.08em; color:var(--text-muted);
+      text-transform:uppercase; margin-bottom:.5rem;
+    }
+    .add-bot-grid { display:grid; grid-template-columns:1fr 1fr; gap:.35rem; }
+    .btn-add-bot {
+      padding:.4rem .5rem; border:1px solid #3b1f6e; border-radius:7px;
+      background:rgba(167,139,250,.07); color:#a78bfa; cursor:pointer;
+      font-size:.75rem; letter-spacing:.04em; transition:all .2s;
+      text-align:left;
+    }
+    .btn-add-bot:hover:not(:disabled) { background:rgba(167,139,250,.18); border-color:#7c3aed; }
+    .btn-add-bot:disabled { opacity:.35; cursor:not-allowed; }
 
     .controls { background:var(--bg-panel); border:1px solid var(--border); border-radius:12px;
                 padding:1.5rem; max-width:820px; width:100%; margin-top:1.5rem; }
@@ -81,10 +105,18 @@
     <div class="team-panel blue">
       <h2>🔵 BLUE TEAM</h2>
       <div id="blue-slots"></div>
+      <div class="add-bot-section" id="blue-bot-panel" style="display:none">
+        <p class="add-bot-label">🤖 Add Bot</p>
+        <div class="add-bot-grid" id="blue-bot-grid"></div>
+      </div>
     </div>
     <div class="team-panel red">
       <h2>🔴 RED TEAM</h2>
       <div id="red-slots"></div>
+      <div class="add-bot-section" id="red-bot-panel" style="display:none">
+        <p class="add-bot-label">🤖 Add Bot</p>
+        <div class="add-bot-grid" id="red-bot-grid"></div>
+      </div>
     </div>
   </div>
 
@@ -116,6 +148,7 @@
     captain: '🎖 Captain', first_mate: '⚙ First Mate',
     engineer: '🔧 Engineer', radio_operator: '📡 Radio Op'
   };
+  const ALL_ROLES = ['captain', 'first_mate', 'engineer', 'radio_operator'];
 
   let myTeam = 'blue', myRole = '', myReady = false;
   let isHost = false;
@@ -142,11 +175,15 @@
     document.getElementById('status-bar').style.color = '#f87171';
   });
 
+  socket.on('bot_added', d => {
+    // Server will send lobby_state update automatically
+  });
+
   function renderLobby() {
     const blue = lobbyPlayers.filter(p => p.team === 'blue');
     const red  = lobbyPlayers.filter(p => p.team === 'red');
-    renderTeam('blue-slots', blue);
-    renderTeam('red-slots', red);
+    renderTeam('blue-slots', blue, 'blue');
+    renderTeam('red-slots',  red,  'red');
 
     // Update my local state from server data
     const me = lobbyPlayers.find(p => p.name === MY_NAME);
@@ -160,12 +197,11 @@
     document.getElementById('btn-blue').classList.toggle('active', myTeam==='blue');
     document.getElementById('btn-red').classList.toggle('active',  myTeam==='red');
 
-    // Role buttons
+    // Role buttons — disable roles taken by others on my team (including bots)
     const takenOnMyTeam = lobbyPlayers
       .filter(p => p.team === myTeam && p.name !== MY_NAME)
       .map(p => p.role);
-
-    ['captain','first_mate','engineer','radio_operator'].forEach(r => {
+    ALL_ROLES.forEach(r => {
       const btn = document.getElementById('role-'+r);
       btn.classList.toggle('active', myRole === r);
       btn.disabled = (r !== myRole && takenOnMyTeam.includes(r));
@@ -177,13 +213,16 @@
     readyBtn.className    = 'btn-ready ' + (myReady ? 'is-ready' : 'not-ready');
     readyBtn.disabled     = !myRole;
 
-    // Start button (host only, needs all players with roles)
-    const allReady = lobbyPlayers.length >= 2 && lobbyPlayers.every(p => p.ready);
-    document.getElementById('btn-start').disabled = !(isHost && allReady);
+    // Start button: host only; everyone (humans) must be ready
+    const humanPlayers = lobbyPlayers.filter(p => !p.is_bot);
+    const allHumansReady = humanPlayers.length >= 1 && humanPlayers.every(p => p.ready);
+    // Also need minimum team structure (server enforces this, but give a hint)
+    const canStart = isHost && allHumansReady && lobbyPlayers.length >= 2;
+    document.getElementById('btn-start').disabled = !canStart;
     if (!isHost) document.getElementById('btn-start').style.display = 'none';
 
     // Status
-    const notReady = lobbyPlayers.filter(p => !p.ready);
+    const notReady = lobbyPlayers.filter(p => !p.ready && !p.is_bot);
     if (notReady.length > 0) {
       document.getElementById('status-bar').textContent =
         `Waiting for: ${notReady.map(p=>p.name).join(', ')}`;
@@ -192,9 +231,13 @@
       document.getElementById('status-bar').textContent = 'All ready! Host can start the game.';
       document.getElementById('status-bar').style.color = '#4ade80';
     }
+
+    // Bot panels (host only)
+    renderBotPanel('blue', blue);
+    renderBotPanel('red',  red);
   }
 
-  function renderTeam(containerId, players) {
+  function renderTeam(containerId, players, team) {
     const el = document.getElementById(containerId);
     el.innerHTML = '';
     if (players.length === 0) {
@@ -203,13 +246,48 @@
     }
     players.forEach(p => {
       const slot = document.createElement('div');
-      slot.className = 'player-slot';
+      const isBot = p.is_bot;
+      slot.className = 'player-slot' + (isBot ? ' bot-slot' : '');
+
+      const nameHtml = isBot
+        ? `<span class="player-name" style="color:#a78bfa;font-style:italic">🤖 ${p.name}</span>`
+        : `<span class="player-name">${p.name}${p.name===MY_NAME?' <em style="opacity:.5">(you)</em>':''}</span>`;
+
+      const removeBtn = (isBot && isHost)
+        ? `<button class="btn-remove-bot" onclick="removeBot('${p.name}')">✕</button>`
+        : '';
+
       slot.innerHTML = `
-        <span class="player-name">${p.name}${p.name===MY_NAME?' <em style="opacity:.5">(you)</em>':''}</span>
+        ${nameHtml}
         <span class="role-badge">${ROLE_LABELS[p.role] || 'No role'}</span>
+        ${removeBtn}
         <span class="ready-dot ${p.ready?'ready':''}"></span>
       `;
       el.appendChild(slot);
+    });
+  }
+
+  function renderBotPanel(team, players) {
+    const panel = document.getElementById(team + '-bot-panel');
+    const grid  = document.getElementById(team + '-bot-grid');
+    if (!isHost) { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+
+    const takenRoles = players.map(p => p.role);
+    const total = lobbyPlayers.length;
+
+    grid.innerHTML = '';
+    ALL_ROLES.forEach(role => {
+      const taken = takenRoles.includes(role);
+      const full  = total >= 8;
+      const btn = document.createElement('button');
+      btn.className = 'btn-add-bot';
+      btn.disabled  = taken || full;
+      btn.textContent = taken
+        ? `${ROLE_LABELS[role]} ✓`
+        : `+ ${ROLE_LABELS[role]}`;
+      btn.onclick = () => addBot(team, role);
+      grid.appendChild(btn);
     });
   }
 
@@ -225,6 +303,14 @@
 
   function toggleReady() {
     socket.emit('player_ready', {game_id: GAME_ID, name: MY_NAME, ready: !myReady});
+  }
+
+  function addBot(team, role) {
+    socket.emit('add_bot', {game_id: GAME_ID, name: MY_NAME, team, role});
+  }
+
+  function removeBot(botName) {
+    socket.emit('remove_bot', {game_id: GAME_ID, name: MY_NAME, bot_name: botName});
   }
 
   function startGame() {
