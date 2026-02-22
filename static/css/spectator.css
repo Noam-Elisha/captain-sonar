@@ -1,0 +1,295 @@
+/* ============================================================
+   Captain Sonar — spectator.css
+   ============================================================ */
+
+.spec-body {
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* ── Layout grid ─────────────────────────────────────────────── */
+.spec-layout {
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr) 150px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.spec-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 0 1rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+  flex-shrink: 0;
+}
+.spec-title {
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--accent);
+  font-size: .9rem;
+}
+.spec-code {
+  font-size: .82rem;
+  color: var(--text-muted);
+  background: var(--bg-deep);
+  padding: .2rem .55rem;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  letter-spacing: .18em;
+}
+.spec-turn-badge {
+  padding: .2rem .7rem;
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  transition: background .3s, color .3s;
+}
+.spec-turn-badge.blue-turn { background: var(--blue); color: #fff; border-color: var(--blue); }
+.spec-turn-badge.red-turn  { background: var(--red);  color: #fff; border-color: var(--red); }
+.spec-turn-badge.ended     { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+.spec-status {
+  font-size: .78rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.spec-name {
+  font-size: .75rem;
+  color: var(--text-muted);
+  padding: .15rem .5rem;
+  border-radius: 4px;
+  background: rgba(255,255,255,.04);
+}
+
+/* ── Main row ─────────────────────────────────────────────────── */
+.spec-main {
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Team panels ──────────────────────────────────────────────── */
+.spec-team-panel {
+  width: 200px;
+  min-width: 160px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.spec-blue { border-right: 1px solid var(--border); }
+.spec-red  { border-left:  1px solid var(--border); }
+
+.stp-title {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  padding: .5rem .75rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.stp-title.blue {
+  color: var(--blue-light);
+  border-top: 3px solid var(--blue);
+  background: rgba(37,99,235,.06);
+}
+.stp-title.red {
+  color: var(--red-light);
+  border-top: 3px solid var(--red);
+  background: rgba(220,38,38,.06);
+}
+.stp-section {
+  padding: .5rem .75rem;
+  border-bottom: 1px solid var(--border);
+}
+.stp-moves { flex: 1; overflow: hidden; }
+
+.stp-surfaced {
+  display: none;
+  margin: .35rem .75rem;
+  padding: .3rem .6rem;
+  background: rgba(234,179,8,.12);
+  border: 1px solid rgba(234,179,8,.35);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-align: center;
+}
+.stp-surfaced.visible { display: block; }
+
+/* ── Systems (mini charge pips) ───────────────────────────────── */
+.sys-row {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin-bottom: .22rem;
+}
+.sys-lbl {
+  font-size: .66rem;
+  color: var(--text-muted);
+  width: 56px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sys-pips {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+.sys-pip {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.15);
+  transition: background .2s;
+}
+.sys-pip.charged.col-red    { background: var(--col-red);    border-color: var(--col-red); }
+.sys-pip.charged.col-green  { background: var(--col-green);  border-color: var(--col-green); }
+.sys-pip.charged.col-yellow { background: var(--col-yellow); border-color: var(--col-yellow); }
+.sys-ready-badge {
+  font-size: .6rem;
+  color: #4ade80;
+  margin-left: 2px;
+  font-weight: 700;
+}
+
+/* ── Mini engineering board ───────────────────────────────────── */
+.mini-eng {
+  display: flex;
+  gap: 4px;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+}
+.mini-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.mini-col-lbl {
+  font-size: .58rem;
+  color: var(--text-muted);
+  letter-spacing: .03em;
+  line-height: 1;
+  margin-bottom: 1px;
+}
+.mini-node {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.12);
+  transition: background .2s, border-color .2s;
+  flex-shrink: 0;
+}
+.mini-node.red        { background: rgba(239,68,68,.15);  border-color: rgba(239,68,68,.3); }
+.mini-node.green      { background: rgba(34,197,94,.15);  border-color: rgba(34,197,94,.3); }
+.mini-node.yellow     { background: rgba(234,179,8,.15);  border-color: rgba(234,179,8,.3); }
+.mini-node.radiation  { background: rgba(168,85,247,.15); border-color: rgba(168,85,247,.3); }
+.mini-node.red.marked        { background: var(--col-red);    border-color: var(--col-red); }
+.mini-node.green.marked      { background: var(--col-green);  border-color: var(--col-green); }
+.mini-node.yellow.marked     { background: var(--col-yellow); border-color: var(--col-yellow); }
+.mini-node.radiation.marked  { background: var(--col-radiation); border-color: var(--col-radiation); }
+.mini-reactor-div {
+  width: 100%;
+  border-top: 1px dashed rgba(255,255,255,.1);
+  margin: 1px 0;
+}
+
+/* ── Move log tags ────────────────────────────────────────────── */
+.move-log {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-height: 90px;
+  overflow-y: auto;
+  padding-top: 2px;
+}
+.move-tag {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: .62rem;
+  letter-spacing: .03em;
+  font-weight: 600;
+  cursor: default;
+}
+.move-tag.blue    { background: rgba(37,99,235,.25);  color: var(--blue-light); }
+.move-tag.red     { background: rgba(220,38,38,.25);  color: var(--red-light); }
+.move-tag.surface { background: rgba(234,179,8,.2);   color: #fbbf24; }
+.move-tag.stealth { background: rgba(167,139,250,.2); color: #a78bfa; }
+
+/* ── Map area ─────────────────────────────────────────────────── */
+.spec-map-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: .6rem .4rem .3rem;
+  overflow: auto;
+  min-width: 0;
+  background: var(--bg-deep);
+}
+.spec-canvas-toolbar {
+  display: flex;
+  gap: .4rem;
+  margin-top: .4rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ── Bottom log bar ───────────────────────────────────────────── */
+.spec-log-bar {
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.spec-log-label {
+  font-size: .68rem;
+  letter-spacing: .1em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  padding: .3rem .75rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.spec-event-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: .3rem .75rem;
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.spec-event-log .log-entry {
+  font-size: .76rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  border-left: 2px solid transparent;
+  padding-left: .4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spec-event-log .log-entry.blue      { border-left-color: var(--blue-light); color: var(--blue-light); }
+.spec-event-log .log-entry.red       { border-left-color: var(--red-light);  color: var(--red-light); }
+.spec-event-log .log-entry.danger    { border-left-color: #fb923c; color: #fdba74; }
+.spec-event-log .log-entry.highlight { border-left-color: var(--accent); color: var(--text); font-weight:600; }
+.spec-event-log .log-entry.stealth   { border-left-color: #a78bfa; color: #c4b5fd; }
+.spec-event-log .log-entry.bot       { color: #a78bfa; }

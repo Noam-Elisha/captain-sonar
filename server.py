@@ -34,6 +34,23 @@ VALID_ROLES = {"captain", "first_mate", "engineer", "radio_operator"}
 BOT_NAME_PREFIX = "Bot"
 
 
+# ── Spectator helpers ─────────────────────────────────────────────────────────
+
+def _get_spectators(game_id):
+    return games[game_id].get("spectators", {})
+
+
+def _broadcast_to_spectators(game_id):
+    """Send full (unmasked) game state to all connected spectators."""
+    g = games[game_id]
+    if not g.get("game"):
+        return
+    state = gs.serialize_game(g["game"], perspective_team=None)
+    for spec in _get_spectators(game_id).values():
+        if spec.get("sid"):
+            socketio.emit("game_state", state, room=spec["sid"])
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _gen_id():
@@ -49,11 +66,13 @@ def _lobby_state(game_id):
     players = []
     for p in g["players"].values():
         players.append({k: v for k, v in p.items() if k != "bot"})
+    spectators = [{"name": s["name"]} for s in g.get("spectators", {}).values()]
     return {
-        "game_id": game_id,
-        "host":    g["host"],
-        "players": players,
-        "phase":   "lobby" if g["game"] is None else g["game"]["phase"],
+        "game_id":    game_id,
+        "host":       g["host"],
+        "players":    players,
+        "spectators": spectators,
+        "phase":      "lobby" if g["game"] is None else g["game"]["phase"],
     }
 
 
@@ -237,7 +256,7 @@ def _current_active(game_id):
 
 
 def _broadcast_game_state(game_id):
-    """Send personalised game state to each connected player."""
+    """Send personalised game state to each connected player, and full state to spectators."""
     g = games[game_id]
     if not g["game"]:
         return
@@ -247,6 +266,8 @@ def _broadcast_game_state(game_id):
         team = p.get("team")
         state = gs.serialize_game(g["game"], perspective_team=team)
         socketio.emit("game_state", state, room=p["sid"])
+    # Spectators get full unmasked state
+    _broadcast_to_spectators(game_id)
 
 
 def _can_start(game_id):
@@ -662,6 +683,35 @@ def lobby():
     return render_template("lobby.html", game_id=game_id, player_name=name)
 
 
+@app.route("/spectate")
+def spectate():
+    """Spectator view — sees full game state, both submarines, all info."""
+    game_id = request.args.get("game_id", "").upper().strip()
+    name    = request.args.get("name", "").strip()
+
+    if not game_id or not name:
+        return redirect(url_for("index"))
+    if game_id not in games:
+        return redirect(url_for("index"))
+
+    g = games[game_id]
+    # If game hasn't started yet, show lobby waiting
+    if g["game"] is None:
+        return redirect(url_for("lobby", game_id=game_id, name=name))
+
+    map_def = g["game"]["map"]
+    return render_template(
+        "spectator.html",
+        game_id=game_id,
+        player_name=name,
+        map_rows=map_def["rows"],
+        map_cols=map_def["cols"],
+        sector_size=map_def["sector_size"],
+        islands=map_def["islands"],
+        col_labels=get_col_labels(map_def["cols"]),
+    )
+
+
 @app.route("/play")
 def play():
     """Redirect to role-specific view."""
@@ -708,11 +758,17 @@ def on_disconnect(*args):
     sid = request.sid
     info = sid_map.pop(sid, None)
     if info:
-        game_id = info["game_id"]
-        name    = info["name"]
-        if game_id in games and name in games[game_id]["players"]:
-            games[game_id]["players"][name]["sid"] = None
-            _emit_lobby(game_id)
+        game_id  = info["game_id"]
+        name     = info["name"]
+        is_spec  = info.get("is_spectator", False)
+        if is_spec:
+            if game_id in games and name in _get_spectators(game_id):
+                games[game_id]["spectators"][name]["sid"] = None
+                _emit_lobby(game_id)
+        else:
+            if game_id in games and name in games[game_id]["players"]:
+                games[game_id]["players"][name]["sid"] = None
+                _emit_lobby(game_id)
 
 
 @socketio.on("join_room")
@@ -731,11 +787,12 @@ def on_create_game(data):
 
     game_id = _gen_id()
     games[game_id] = {
-        "game":    None,
-        "players": {name: {"name": name, "team": "blue", "role": "",
-                            "ready": False, "sid": request.sid,
-                            "is_bot": False, "bot": None}},
-        "host":    name,
+        "game":       None,
+        "players":    {name: {"name": name, "team": "blue", "role": "",
+                               "ready": False, "sid": request.sid,
+                               "is_bot": False, "bot": None}},
+        "spectators": {},
+        "host":       name,
     }
     sid_map[request.sid] = {"game_id": game_id, "name": name}
     join_room(game_id)
@@ -753,6 +810,20 @@ def on_join_game(data):
     if game_id not in games:
         return emit("error", {"msg": "Game not found"})
     g = games[game_id]
+
+    # Handle spectator rejoin
+    if name in g.get("spectators", {}):
+        g["spectators"][name]["sid"] = request.sid
+        sid_map[request.sid] = {"game_id": game_id, "name": name, "is_spectator": True}
+        join_room(game_id)
+        emit("spectator_ack", {"game_id": game_id, "name": name})
+        if g["game"] is not None:
+            state = gs.serialize_game(g["game"], perspective_team=None)
+            emit("game_state", state)
+        else:
+            _emit_lobby(game_id)
+        return
+
     if name in g["players"]:
         # Rejoin (reconnect) — update sid, restore state
         g["players"][name]["sid"] = request.sid
@@ -782,6 +853,47 @@ def on_join_game(data):
     sid_map[request.sid] = {"game_id": game_id, "name": name}
     join_room(game_id)
     emit("join_ack", {"game_id": game_id, "name": name})
+    _emit_lobby(game_id)
+
+
+@socketio.on("join_as_spectator")
+def on_join_as_spectator(data):
+    """Join a game as a spectator (no role, full game visibility)."""
+    game_id = (data.get("game_id") or "").upper().strip()
+    name    = (data.get("name") or "").strip()
+
+    if not game_id or not name:
+        return emit("error", {"msg": "game_id and name required"})
+    if game_id not in games:
+        return emit("error", {"msg": "Game not found"})
+
+    g = games[game_id]
+
+    # If they're currently a player, remove them from players first
+    if name in g["players"] and not g["players"][name].get("is_bot"):
+        del g["players"][name]
+
+    # Init spectators dict if missing (older games)
+    if "spectators" not in g:
+        g["spectators"] = {}
+
+    # Duplicate name check (against other spectators and players)
+    all_names = (
+        set(g["players"].keys()) |
+        {s for s in g["spectators"] if s != name}
+    )
+    if any(n.lower() == name.lower() for n in all_names):
+        return emit("error", {"msg": "Name already taken by a player"})
+
+    g["spectators"][name] = {"name": name, "sid": request.sid}
+    sid_map[request.sid] = {"game_id": game_id, "name": name, "is_spectator": True}
+    join_room(game_id)
+    emit("spectator_ack", {"game_id": game_id, "name": name})
+
+    if g["game"] is not None:
+        state = gs.serialize_game(g["game"], perspective_team=None)
+        emit("game_state", state)
+
     _emit_lobby(game_id)
 
 

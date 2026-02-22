@@ -1,0 +1,109 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Spectator — Captain Sonar</title>
+  <link rel="stylesheet" href="/static/css/base.css"/>
+  <link rel="stylesheet" href="/static/css/spectator.css"/>
+</head>
+<body class="spec-body">
+
+<div class="spec-layout">
+
+  <!-- ── HEADER ───────────────────────────────────────────────── -->
+  <header class="spec-header">
+    <span class="spec-title">👁 SPECTATING</span>
+    <span class="spec-code">{{ game_id }}</span>
+    <div class="spec-turn-badge" id="spec-turn">WAITING</div>
+    <div class="spec-status" id="spec-status">Connecting…</div>
+    <span class="spec-name">{{ player_name }}</span>
+  </header>
+
+  <!-- ── MAIN: blue panel | map | red panel ───────────────────── -->
+  <div class="spec-main">
+
+    <!-- BLUE TEAM PANEL -->
+    <div class="spec-team-panel spec-blue">
+      <div class="stp-title blue">🔵 BLUE TEAM</div>
+      <div class="stp-section">
+        <div class="section-label">HEALTH</div>
+        <div class="health-row" id="blue-health"></div>
+      </div>
+      <div class="stp-section">
+        <div class="section-label">SYSTEMS</div>
+        <div id="blue-systems"></div>
+      </div>
+      <div class="stp-section">
+        <div class="section-label">ENGINEERING</div>
+        <div id="blue-eng"></div>
+      </div>
+      <div class="stp-surfaced" id="blue-surfaced">⚠ SURFACED</div>
+      <div class="stp-section stp-moves">
+        <div class="section-label">MOVE LOG</div>
+        <div class="move-log" id="blue-moves"></div>
+      </div>
+    </div>
+
+    <!-- MAP CENTER -->
+    <div class="spec-map-area">
+      <div class="map-wrapper" id="spec-wrapper" style="position:relative;display:inline-block">
+        <div id="spec-map" class="map-grid"></div>
+        <svg id="spec-svg" style="position:absolute;top:0;left:0;pointer-events:none;overflow:visible;z-index:2;"></svg>
+        <canvas id="spec-canvas" style="position:absolute;top:0;left:0;z-index:3;cursor:crosshair;opacity:0.85;"></canvas>
+      </div>
+      <div class="spec-canvas-toolbar">
+        <span style="color:var(--text-muted);font-size:.75rem;margin-right:.4rem;">Your notes:</span>
+        <button class="tool-btn active" id="stool-draw"  onclick="setSpecTool('draw')">✏ Draw</button>
+        <button class="tool-btn"        id="stool-erase" onclick="setSpecTool('erase')">⌫ Erase</button>
+        <button class="tool-btn"        id="stool-clear" onclick="clearSpecCanvas()">✕ Clear</button>
+      </div>
+    </div>
+
+    <!-- RED TEAM PANEL -->
+    <div class="spec-team-panel spec-red">
+      <div class="stp-title red">🔴 RED TEAM</div>
+      <div class="stp-section">
+        <div class="section-label">HEALTH</div>
+        <div class="health-row" id="red-health"></div>
+      </div>
+      <div class="stp-section">
+        <div class="section-label">SYSTEMS</div>
+        <div id="red-systems"></div>
+      </div>
+      <div class="stp-section">
+        <div class="section-label">ENGINEERING</div>
+        <div id="red-eng"></div>
+      </div>
+      <div class="stp-surfaced" id="red-surfaced">⚠ SURFACED</div>
+      <div class="stp-section stp-moves">
+        <div class="section-label">MOVE LOG</div>
+        <div class="move-log" id="red-moves"></div>
+      </div>
+    </div>
+
+  </div><!-- /spec-main -->
+
+  <!-- ── BOTTOM LOG ──────────────────────────────────────────── -->
+  <div class="spec-log-bar">
+    <div class="spec-log-label">EVENT LOG</div>
+    <div class="spec-event-log" id="spec-event-log"></div>
+  </div>
+
+</div><!-- /spec-layout -->
+
+<div id="result-toast" class="result-toast hidden"></div>
+
+<script>
+  const GAME_ID    = "{{ game_id }}";
+  const MY_NAME    = "{{ player_name }}";
+  const MAP_ROWS   = {{ map_rows }};
+  const MAP_COLS   = {{ map_cols }};
+  const SECTOR_SZ  = {{ sector_size }};
+  const ISLANDS    = {{ islands | tojson }};
+  const COL_LABELS = {{ col_labels | tojson }};
+</script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/static/js/spectator.js"></script>
+</body>
+</html>

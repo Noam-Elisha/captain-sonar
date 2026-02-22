@@ -53,6 +53,7 @@
   <div class="tabs">
     <button class="tab-btn active" id="tab-create" onclick="switchTab('create')">Create Game</button>
     <button class="tab-btn"        id="tab-join"   onclick="switchTab('join')">Join Game</button>
+    <button class="tab-btn"        id="tab-spectate" onclick="switchTab('spectate')">👁 Spectate</button>
   </div>
 
   <!-- Create -->
@@ -74,6 +75,20 @@
     <p class="error-msg" id="join-error"></p>
   </div>
 
+  <!-- Spectate -->
+  <div class="tab-content" id="pane-spectate">
+    <label for="spec-name">YOUR NAME</label>
+    <input type="text" id="spec-name" placeholder="e.g. Observer" maxlength="24"/>
+    <label for="spec-code">GAME CODE</label>
+    <input type="text" id="spec-code" placeholder="6-character code" maxlength="6"
+           style="text-transform:uppercase"/>
+    <button class="btn-primary" onclick="spectateGame()" style="background:#7c3aed">👁 Watch Game</button>
+    <p class="error-msg" id="spectate-error"></p>
+    <p style="color:var(--text-muted);font-size:.75rem;margin-top:.6rem;text-align:center;">
+      You'll see both submarines &amp; all game info — no role needed
+    </p>
+  </div>
+
   <hr class="divider"/>
   <p class="code-hint">Needs 2–8 players · Each team needs Captain, First Mate &amp; Engineer</p>
 </div>
@@ -83,7 +98,7 @@
   const socket = io();
 
   function switchTab(t) {
-    ['create','join'].forEach(id => {
+    ['create','join','spectate'].forEach(id => {
       document.getElementById('tab-'+id).classList.toggle('active', id===t);
       document.getElementById('pane-'+id).classList.toggle('active', id===t);
     });
@@ -107,23 +122,35 @@
     document.getElementById(tab+'-error').textContent = msg;
   }
 
+  function spectateGame() {
+    const name = document.getElementById('spec-name').value.trim();
+    const code = document.getElementById('spec-code').value.trim().toUpperCase();
+    if (!name) return showErr('spectate', 'Enter your name');
+    if (code.length !== 6) return showErr('spectate', 'Enter the 6-character game code');
+    socket.emit('join_as_spectator', {name, game_id: code});
+  }
+
   socket.on('game_created', d => {
     window.location.href = `/lobby?game_id=${d.game_id}&name=${encodeURIComponent(d.name)}`;
   });
   socket.on('join_ack', d => {
     window.location.href = `/lobby?game_id=${d.game_id}&name=${encodeURIComponent(d.name)}`;
   });
+  socket.on('spectator_ack', d => {
+    window.location.href = `/spectate?game_id=${d.game_id}&name=${encodeURIComponent(d.name)}`;
+  });
   socket.on('error', d => {
-    // Show error in whichever tab is active
-    const tab = document.getElementById('pane-create').classList.contains('active') ? 'create' : 'join';
-    showErr(tab, d.msg);
+    const active = ['create','join','spectate'].find(t =>
+      document.getElementById('pane-'+t)?.classList.contains('active'));
+    showErr(active || 'join', d.msg);
   });
 
   // Enter key support
   document.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
-    if (document.getElementById('pane-create').classList.contains('active')) createGame();
-    else joinGame();
+    if (document.getElementById('pane-create').classList.contains('active'))   createGame();
+    else if (document.getElementById('pane-join').classList.contains('active')) joinGame();
+    else spectateGame();
   });
 </script>
 </body>

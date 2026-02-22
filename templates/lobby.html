@@ -95,6 +95,35 @@
     .btn-start:disabled { opacity:.4; cursor:not-allowed; }
 
     .status-bar { color:var(--text-muted); font-size:.8rem; text-align:center; margin-top:1rem; min-height:1em; }
+
+    /* Spectator panel */
+    .spectators-panel {
+      background:var(--bg-panel); border:1px solid var(--border); border-radius:12px;
+      padding:1.2rem; max-width:820px; width:100%; margin-top:1rem;
+      border-top: 3px solid #7c3aed;
+    }
+    .spectators-panel h2 { color:#a78bfa; letter-spacing:.1em; margin:0 0 .6rem; font-size:.85rem; }
+    .spec-list { display:flex; flex-wrap:wrap; gap:.4rem; min-height:1.5em; }
+    .spec-badge {
+      padding:.25rem .6rem; border-radius:999px; background:rgba(124,58,237,.15);
+      border:1px solid rgba(124,58,237,.3); color:#a78bfa; font-size:.78rem;
+    }
+    .spectator-mode-bar {
+      background:rgba(124,58,237,.12); border:1px solid rgba(124,58,237,.3);
+      border-radius:10px; padding:1rem 1.2rem; max-width:820px; width:100%;
+      margin-top:1rem; display:none;
+    }
+    .spectator-mode-bar p { color:#a78bfa; margin:0 0 .5rem; font-size:.9rem; }
+    .btn-leave-spec {
+      padding:.45rem 1rem; border:1px solid rgba(124,58,237,.4); border-radius:7px;
+      background:transparent; color:#a78bfa; cursor:pointer; font-size:.82rem;
+    }
+    .btn-leave-spec:hover { background:rgba(124,58,237,.2); }
+    .btn-spec {
+      flex:1; padding:.7rem; border-radius:8px; border:none; font-size:.95rem;
+      font-weight:600; cursor:pointer; background:#7c3aed; color:#fff;
+    }
+    .btn-spec:disabled { opacity:.4; cursor:not-allowed; }
   </style>
 </head>
 <body>
@@ -120,7 +149,21 @@
     </div>
   </div>
 
-  <div class="controls">
+  <!-- Spectators list -->
+  <div class="spectators-panel">
+    <h2>👁 SPECTATORS</h2>
+    <div class="spec-list" id="spec-list">
+      <span style="color:var(--text-muted);font-size:.8rem">No spectators yet</span>
+    </div>
+  </div>
+
+  <!-- Spectator mode bar (shown when YOU are a spectator) -->
+  <div class="spectator-mode-bar" id="spectator-mode-bar">
+    <p>👁 <strong>You are watching as spectator.</strong> When the game starts you'll see everything — both submarines, all systems, and the full map.</p>
+    <button class="btn-leave-spec" onclick="leaveSpectator()">← Join as Player Instead</button>
+  </div>
+
+  <div class="controls" id="player-controls">
     <h2>YOUR SETTINGS</h2>
     <div class="team-row">
       <button class="team-btn blue" id="btn-blue" onclick="chooseTeam('blue')">🔵 Blue Team</button>
@@ -136,6 +179,7 @@
     <div class="action-row">
       <button class="btn-ready not-ready" id="btn-ready" onclick="toggleReady()">Ready Up</button>
       <button class="btn-start" id="btn-start" onclick="startGame()" disabled>Start Game</button>
+      <button class="btn-spec"  id="btn-spectate" onclick="joinAsSpectator()">👁 Watch</button>
     </div>
     <p class="status-bar" id="status-bar">Waiting for players…</p>
   </div>
@@ -152,7 +196,9 @@
 
   let myTeam = 'blue', myRole = '', myReady = false;
   let isHost = false;
+  let isSpectator = false;
   let lobbyPlayers = [];
+  let lobbySpectators = [];
 
   const socket = io();
   socket.on('connect', () => {
@@ -161,13 +207,27 @@
   });
 
   socket.on('lobby_state', data => {
-    lobbyPlayers = data.players || [];
+    lobbyPlayers   = data.players    || [];
+    lobbySpectators = data.spectators || [];
     isHost = (data.host === MY_NAME);
+    // Check if I became a spectator
+    if (lobbySpectators.some(s => s.name === MY_NAME)) {
+      isSpectator = true;
+    }
+    renderLobby();
+  });
+
+  socket.on('spectator_ack', data => {
+    isSpectator = true;
     renderLobby();
   });
 
   socket.on('game_started', data => {
-    window.location.href = `/play?game_id=${GAME_ID}&name=${encodeURIComponent(MY_NAME)}`;
+    if (isSpectator) {
+      window.location.href = `/spectate?game_id=${GAME_ID}&name=${encodeURIComponent(MY_NAME)}`;
+    } else {
+      window.location.href = `/play?game_id=${GAME_ID}&name=${encodeURIComponent(MY_NAME)}`;
+    }
   });
 
   socket.on('error', d => {
@@ -184,6 +244,33 @@
     const red  = lobbyPlayers.filter(p => p.team === 'red');
     renderTeam('blue-slots', blue, 'blue');
     renderTeam('red-slots',  red,  'red');
+
+    // Spectator list
+    const specList = document.getElementById('spec-list');
+    if (specList) {
+      specList.innerHTML = '';
+      if (lobbySpectators.length === 0) {
+        specList.innerHTML = '<span style="color:var(--text-muted);font-size:.8rem">No spectators yet</span>';
+      } else {
+        lobbySpectators.forEach(s => {
+          const badge = document.createElement('span');
+          badge.className = 'spec-badge';
+          badge.textContent = '👁 ' + s.name + (s.name === MY_NAME ? ' (you)' : '');
+          specList.appendChild(badge);
+        });
+      }
+    }
+
+    // Show/hide spectator vs player controls
+    const specBar     = document.getElementById('spectator-mode-bar');
+    const playerCtrl  = document.getElementById('player-controls');
+    if (isSpectator) {
+      if (specBar)    specBar.style.display    = '';
+      if (playerCtrl) playerCtrl.style.display = 'none';
+      return;
+    }
+    if (specBar)    specBar.style.display    = 'none';
+    if (playerCtrl) playerCtrl.style.display = '';
 
     // Update my local state from server data
     const me = lobbyPlayers.find(p => p.name === MY_NAME);
@@ -315,6 +402,17 @@
 
   function startGame() {
     socket.emit('start_game', {game_id: GAME_ID, name: MY_NAME});
+  }
+
+  function joinAsSpectator() {
+    socket.emit('join_as_spectator', {game_id: GAME_ID, name: MY_NAME});
+  }
+
+  function leaveSpectator() {
+    // Re-join as a regular player
+    isSpectator = false;
+    socket.emit('join_game', {game_id: GAME_ID, name: MY_NAME});
+    renderLobby();
   }
 </script>
 </body>

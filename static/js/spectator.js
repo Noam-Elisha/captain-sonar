@@ -1,0 +1,516 @@
+/* ============================================================
+   Captain Sonar — spectator.js
+   Full-visibility observer: sees both submarines, all systems,
+   all engineering boards, and can take notes on the map.
+   ============================================================ */
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const CELL_PX   = 32;
+const MAP_LABEL = 24;   // px for row/col label strip
+const ISLAND_SET = new Set(ISLANDS.map(([r, c]) => `${r},${c}`));
+
+const SYSTEM_MAX    = { torpedo: 3, mine: 3, sonar: 3, drone: 4, stealth: 5 };
+const SYSTEM_LABELS = { torpedo: '🚀 Torpedo', mine: '💣 Mine', sonar: '📡 Sonar', drone: '🛸 Drone', stealth: '👻 Stealth' };
+const SYSTEM_COLOR  = { torpedo: 'col-red', mine: 'col-red', sonar: 'col-green', drone: 'col-green', stealth: 'col-yellow' };
+const ENG_DIR_ORDER = ['west', 'north', 'south', 'east'];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let lastBlue = null, lastRed = null;
+let specTool = 'draw', specDrawing = false, specLastX = 0, specLastY = 0;
+let specCanvas, specCtx;
+
+// ── Socket ────────────────────────────────────────────────────────────────────
+const socket = io();
+
+socket.on('connect', () => {
+  socket.emit('join_room',        { game_id: GAME_ID });
+  socket.emit('join_as_spectator', { game_id: GAME_ID, name: MY_NAME });
+});
+
+socket.on('spectator_ack', data => {
+  logEvent('👁 Connected as spectator', 'highlight');
+  document.getElementById('spec-status').textContent = 'Watching live game';
+});
+
+socket.on('game_state', state => {
+  if (!state || !state.submarines) return;
+  lastBlue = state.submarines.blue;
+  lastRed  = state.submarines.red;
+  updateHeader(state);
+  updateTeamPanel('blue', lastBlue);
+  updateTeamPanel('red',  lastRed);
+  redrawSVG(lastBlue, lastRed);
+});
+
+socket.on('direction_announced', data => {
+  const t = data.team;
+  logEvent(`${t === 'blue' ? '🔵' : '🔴'} [${t.toUpperCase()}] moved ${data.direction.toUpperCase()}`, t);
+  addMoveTag(t, data.direction.toUpperCase().slice(0, 1), t);
+});
+
+socket.on('surface_announced', data => {
+  const t = data.team;
+  logEvent(`${t === 'blue' ? '🔵' : '🔴'} [${t.toUpperCase()}] SURFACED in sector ${data.sector} ⚠`, 'danger');
+  addMoveTag(t, '⚓', 'surface');
+  setSurfaced(t, true);
+});
+
+socket.on('dive_announced', data => {
+  logEvent(`${data.team === 'blue' ? '🔵' : '🔴'} [${data.team.toUpperCase()}] dived back down`);
+  setSurfaced(data.team, false);
+});
+
+socket.on('torpedo_fired', data => {
+  logEvent(`🚀 [${data.team.toUpperCase()}] fired torpedo → (${data.row + 1}, ${data.col + 1})`, 'danger');
+  flashExplosion(data.row, data.col, '#f97316');
+});
+
+socket.on('mine_detonated', data => {
+  logEvent(`💥 [${data.team.toUpperCase()}] detonated mine at (${data.row + 1}, ${data.col + 1})`, 'danger');
+  flashExplosion(data.row, data.col, '#ef4444');
+});
+
+socket.on('stealth_announced', data => {
+  const t = data.team;
+  logEvent(`👻 [${t.toUpperCase()}] used STEALTH — ${data.steps} silent step(s)`, 'stealth');
+  addMoveTag(t, '👻', 'stealth');
+});
+
+socket.on('damage', data => {
+  const t = data.team;
+  logEvent(`💥 [${t.toUpperCase()}] took ${data.amount} damage  (${data.health} HP remain)`, 'danger');
+});
+
+socket.on('sonar_announced',  data => logEvent(`📡 [${data.team.toUpperCase()}] used sonar`));
+socket.on('drone_announced',  data => logEvent(`🛸 [${data.team.toUpperCase()}] drone → sector ${data.sector}`));
+
+socket.on('turn_start', data => {
+  setTurnBadge(data.team);
+});
+
+socket.on('game_phase', data => {
+  if (data.current_team) setTurnBadge(data.current_team);
+  document.getElementById('spec-status').textContent = 'Playing…';
+});
+
+socket.on('game_over', data => {
+  logEvent(`🏆 GAME OVER — ${data.winner.toUpperCase()} WINS!`, 'highlight');
+  const badge = document.getElementById('spec-turn');
+  badge.textContent = `${data.winner.toUpperCase()} WINS!`;
+  badge.className   = 'spec-turn-badge ended';
+  document.getElementById('spec-status').textContent = `Game over — ${data.winner} wins`;
+});
+
+socket.on('sub_placed', data => {
+  logEvent(`${data.team === 'blue' ? '🔵' : '🔴'} [${data.team.toUpperCase()}] submarine placed`, data.team);
+});
+
+socket.on('bot_chat', data => {
+  logEvent(`🤖 [${data.name}]: ${data.msg}`, 'bot');
+});
+
+socket.on('error', data => {
+  logEvent(`⚠ ${data.msg}`, 'danger');
+});
+
+// ── Header ────────────────────────────────────────────────────────────────────
+function updateHeader(state) {
+  const statusEl = document.getElementById('spec-status');
+  if (statusEl) {
+    if      (state.phase === 'placement') statusEl.textContent = 'Placement phase…';
+    else if (state.phase === 'playing')   statusEl.textContent = `Turn ${(state.turn_index || 0) + 1}`;
+    else if (state.phase === 'ended')     statusEl.textContent = `OVER — ${state.winner?.toUpperCase()} wins!`;
+  }
+  if (state.current_team) setTurnBadge(state.current_team);
+}
+
+function setTurnBadge(team) {
+  const el = document.getElementById('spec-turn');
+  if (!el) return;
+  el.textContent = `${team.toUpperCase()} TEAM`;
+  el.className   = `spec-turn-badge ${team}-turn`;
+}
+
+// ── Team panels ───────────────────────────────────────────────────────────────
+function updateTeamPanel(team, sub) {
+  if (!sub) return;
+  renderHealth(team + '-health', sub.health, 4);
+  renderSystems(team + '-systems', sub.systems);
+  if (sub.engineering) renderEngBoard(team + '-eng', sub.engineering);
+  setSurfaced(team, !!sub.surfaced);
+}
+
+function setSurfaced(team, on) {
+  const el = document.getElementById(team + '-surfaced');
+  if (el) el.classList.toggle('visible', on);
+}
+
+function renderHealth(id, hp, max) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = '';
+  for (let i = 0; i < max; i++) {
+    const s = document.createElement('span');
+    s.className   = 'health-heart' + (i < hp ? '' : ' empty');
+    s.textContent = i < hp ? '❤️' : '🖤';
+    el.appendChild(s);
+  }
+}
+
+function renderSystems(id, systems) {
+  const el = document.getElementById(id);
+  if (!el || !systems) return;
+  el.innerHTML = '';
+  Object.entries(SYSTEM_MAX).forEach(([sys, maxVal]) => {
+    const info    = systems[sys];
+    const charge  = (typeof info === 'object' ? info.charge : info) || 0;
+    const maxC    = (typeof info === 'object' ? info.max    : maxVal) || maxVal;
+    const ready   = charge >= maxC;
+    const colClass = SYSTEM_COLOR[sys] || '';
+
+    const row  = document.createElement('div');
+    row.className = 'sys-row';
+
+    const lbl  = document.createElement('span');
+    lbl.className = 'sys-lbl';
+    lbl.textContent = SYSTEM_LABELS[sys];
+
+    const pips = document.createElement('span');
+    pips.className = 'sys-pips';
+    for (let i = 0; i < maxC; i++) {
+      const pip = document.createElement('span');
+      pip.className = 'sys-pip' + (i < charge ? ' charged ' + colClass : '');
+      pips.appendChild(pip);
+    }
+    if (ready) {
+      const rdy = document.createElement('span');
+      rdy.className   = 'sys-ready-badge';
+      rdy.textContent = '✓';
+      pips.appendChild(rdy);
+    }
+
+    row.appendChild(lbl);
+    row.appendChild(pips);
+    el.appendChild(row);
+  });
+}
+
+function renderEngBoard(id, board) {
+  const el = document.getElementById(id);
+  if (!el || !board) return;
+  el.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'mini-eng';
+  ENG_DIR_ORDER.forEach(dir => {
+    const nodes = board[dir];
+    if (!nodes) return;
+    const col = document.createElement('div');
+    col.className = 'mini-col';
+
+    const lbl = document.createElement('div');
+    lbl.className   = 'mini-col-lbl';
+    lbl.textContent = dir[0].toUpperCase();
+    col.appendChild(lbl);
+
+    nodes.forEach((node, ni) => {
+      if (ni === 3) {
+        const div = document.createElement('div');
+        div.className = 'mini-reactor-div';
+        col.appendChild(div);
+      }
+      const dot = document.createElement('div');
+      dot.className = 'mini-node ' + node.color + (node.marked ? ' marked' : '');
+      col.appendChild(dot);
+    });
+    wrap.appendChild(col);
+  });
+  el.appendChild(wrap);
+}
+
+// ── Move log ──────────────────────────────────────────────────────────────────
+function addMoveTag(team, label, type) {
+  const logEl = document.getElementById(team + '-moves');
+  if (!logEl) return;
+  const tag = document.createElement('span');
+  tag.className   = 'move-tag ' + (type || team);
+  tag.textContent = label;
+  tag.title       = label;
+  logEl.prepend(tag);
+  while (logEl.children.length > 50) logEl.lastChild.remove();
+}
+
+// ── Event log ─────────────────────────────────────────────────────────────────
+function logEvent(msg, cls) {
+  const log = document.getElementById('spec-event-log');
+  if (!log) return;
+  const entry = document.createElement('div');
+  entry.className   = 'log-entry' + (cls ? ' ' + cls : '');
+  const t = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  entry.textContent = `[${t}] ${msg}`;
+  log.prepend(entry);
+  while (log.children.length > 120) log.lastChild.remove();
+}
+
+// ── Map rendering ─────────────────────────────────────────────────────────────
+function renderMap() {
+  const grid = document.getElementById('spec-map');
+  if (!grid) return;
+  grid.innerHTML = '';
+  grid.style.gridTemplateColumns = `${MAP_LABEL}px repeat(${MAP_COLS}, ${CELL_PX}px)`;
+  grid.style.gridTemplateRows    = `${MAP_LABEL}px repeat(${MAP_ROWS}, ${CELL_PX}px)`;
+
+  // Corner
+  const corner = document.createElement('div');
+  corner.className = 'map-label';
+  grid.appendChild(corner);
+
+  // Column labels
+  COL_LABELS.forEach(l => {
+    const el = document.createElement('div');
+    el.className   = 'map-label';
+    el.textContent = l;
+    grid.appendChild(el);
+  });
+
+  // Rows + cells
+  for (let r = 0; r < MAP_ROWS; r++) {
+    const rl = document.createElement('div');
+    rl.className   = 'map-label';
+    rl.textContent = r + 1;
+    grid.appendChild(rl);
+    for (let c = 0; c < MAP_COLS; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'map-cell';
+      if (ISLAND_SET.has(`${r},${c}`)) cell.classList.add('island-cell');
+      grid.appendChild(cell);
+    }
+  }
+
+  // Sector boxes
+  const wrapper = document.getElementById('spec-wrapper');
+  const sPerRow = Math.ceil(MAP_ROWS / SECTOR_SZ);
+  const sPerCol = Math.ceil(MAP_COLS / SECTOR_SZ);
+  for (let sr = 0; sr < sPerRow; sr++) {
+    for (let sc = 0; sc < sPerCol; sc++) {
+      const box    = document.createElement('div');
+      box.className = 'sector-box';
+      const startR = sr * SECTOR_SZ, startC = sc * SECTOR_SZ;
+      const endR   = Math.min(startR + SECTOR_SZ, MAP_ROWS);
+      const endC   = Math.min(startC + SECTOR_SZ, MAP_COLS);
+      box.style.cssText = `position:absolute;`
+        + `left:${MAP_LABEL + startC * CELL_PX}px;`
+        + `top:${MAP_LABEL + startR * CELL_PX}px;`
+        + `width:${(endC - startC) * CELL_PX}px;`
+        + `height:${(endR - startR) * CELL_PX}px;`;
+      const lblEl = document.createElement('div');
+      lblEl.className   = 'sector-label';
+      lblEl.textContent = sr * sPerCol + sc + 1;
+      box.appendChild(lblEl);
+      wrapper.appendChild(box);
+    }
+  }
+
+  // Set SVG / canvas dimensions
+  const totalW = MAP_LABEL + MAP_COLS * CELL_PX;
+  const totalH = MAP_LABEL + MAP_ROWS * CELL_PX;
+  const svg = document.getElementById('spec-svg');
+  if (svg) { svg.setAttribute('width', totalW); svg.setAttribute('height', totalH); }
+
+  initSpecCanvas(totalW, totalH);
+}
+
+// ── SVG overlay for subs, trails, mines ───────────────────────────────────────
+function cellCenter(row, col) {
+  return {
+    x: MAP_LABEL + col * CELL_PX + CELL_PX / 2,
+    y: MAP_LABEL + row * CELL_PX + CELL_PX / 2,
+  };
+}
+
+function redrawSVG(blue, red) {
+  const svg = document.getElementById('spec-svg');
+  if (!svg) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  svg.innerHTML = '';
+
+  // Trails
+  drawTrail(svg, ns, blue?.trail, '#60a5fa', 0.55);
+  drawTrail(svg, ns, red?.trail,  '#f87171', 0.55);
+
+  // Mines
+  (blue?.mines || []).forEach(([r, c]) => {
+    const { x, y } = cellCenter(r, c);
+    drawMine(svg, ns, x, y, '#60a5fa');
+  });
+  (red?.mines || []).forEach(([r, c]) => {
+    const { x, y } = cellCenter(r, c);
+    drawMine(svg, ns, x, y, '#f87171');
+  });
+
+  // Sub markers (drawn on top of trails)
+  if (blue?.position) {
+    const [r, c] = blue.position;
+    const { x, y } = cellCenter(r, c);
+    drawSub(svg, ns, x, y, '#2563eb', '#60a5fa');
+  }
+  if (red?.position) {
+    const [r, c] = red.position;
+    const { x, y } = cellCenter(r, c);
+    drawSub(svg, ns, x, y, '#dc2626', '#f87171');
+  }
+}
+
+function drawTrail(svg, ns, trail, color, opacity) {
+  if (!trail || trail.length < 2) return;
+  const pts = trail.map(([r, c]) => {
+    const { x, y } = cellCenter(r, c);
+    return `${x},${y}`;
+  }).join(' ');
+  const line = document.createElementNS(ns, 'polyline');
+  line.setAttribute('points',          pts);
+  line.setAttribute('stroke',          color);
+  line.setAttribute('stroke-width',    '2.5');
+  line.setAttribute('stroke-opacity',  String(opacity));
+  line.setAttribute('fill',            'none');
+  line.setAttribute('stroke-linecap',  'round');
+  line.setAttribute('stroke-linejoin', 'round');
+  svg.appendChild(line);
+}
+
+function drawSub(svg, ns, x, y, fillColor, glowColor) {
+  // Glow aura
+  const glow = document.createElementNS(ns, 'circle');
+  glow.setAttribute('cx', x); glow.setAttribute('cy', y); glow.setAttribute('r', 15);
+  glow.setAttribute('fill', fillColor); glow.setAttribute('fill-opacity', '0.18');
+  svg.appendChild(glow);
+
+  // Main circle
+  const c = document.createElementNS(ns, 'circle');
+  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 9);
+  c.setAttribute('fill', fillColor); c.setAttribute('stroke', '#fff'); c.setAttribute('stroke-width', '2');
+  svg.appendChild(c);
+
+  // Sub symbol
+  const t = document.createElementNS(ns, 'text');
+  t.setAttribute('x', x); t.setAttribute('y', y + 4);
+  t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '10');
+  t.setAttribute('fill', '#fff'); t.setAttribute('pointer-events', 'none');
+  t.textContent = '⛵';
+  svg.appendChild(t);
+}
+
+function drawMine(svg, ns, x, y, color) {
+  const c = document.createElementNS(ns, 'circle');
+  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 5);
+  c.setAttribute('fill', color); c.setAttribute('fill-opacity', '0.65');
+  c.setAttribute('stroke', color); c.setAttribute('stroke-width', '1');
+  svg.appendChild(c);
+
+  const t = document.createElementNS(ns, 'text');
+  t.setAttribute('x', x); t.setAttribute('y', y + 3);
+  t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '7');
+  t.setAttribute('fill', '#fff'); t.setAttribute('pointer-events', 'none');
+  t.textContent = '✕';
+  svg.appendChild(t);
+}
+
+function flashExplosion(row, col, color) {
+  const svg = document.getElementById('spec-svg');
+  if (!svg) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  const { x, y } = cellCenter(row, col);
+
+  const ring = document.createElementNS(ns, 'circle');
+  ring.setAttribute('cx', x); ring.setAttribute('cy', y); ring.setAttribute('r', '8');
+  ring.setAttribute('fill', color); ring.setAttribute('fill-opacity', '0.85');
+  ring.setAttribute('stroke', '#fff'); ring.setAttribute('stroke-width', '1.5');
+  svg.appendChild(ring);
+
+  let r = 8, op = 0.85;
+  const anim = setInterval(() => {
+    r  += 3.5;
+    op -= 0.1;
+    if (op <= 0) {
+      clearInterval(anim);
+      if (ring.parentNode) ring.parentNode.removeChild(ring);
+      return;
+    }
+    ring.setAttribute('r', String(r));
+    ring.setAttribute('fill-opacity', String(Math.max(op, 0)));
+    ring.setAttribute('stroke-opacity', String(Math.max(op * 1.5, 0)));
+  }, 40);
+}
+
+// ── Spectator drawing canvas ───────────────────────────────────────────────────
+function initSpecCanvas(w, h) {
+  specCanvas = document.getElementById('spec-canvas');
+  if (!specCanvas) return;
+  specCtx = specCanvas.getContext('2d');
+  specCanvas.width  = w;
+  specCanvas.height = h;
+
+  specCanvas.addEventListener('mousedown',  startSpecDraw);
+  specCanvas.addEventListener('mousemove',  doSpecDraw);
+  specCanvas.addEventListener('mouseup',    stopSpecDraw);
+  specCanvas.addEventListener('mouseleave', stopSpecDraw);
+  specCanvas.addEventListener('touchstart',  e => { e.preventDefault(); startSpecDraw(e.touches[0]); }, { passive: false });
+  specCanvas.addEventListener('touchmove',   e => { e.preventDefault(); doSpecDraw(e.touches[0]); },   { passive: false });
+  specCanvas.addEventListener('touchend',    stopSpecDraw);
+}
+
+function getSpecPos(e) {
+  const rect = specCanvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (specCanvas.width  / rect.width),
+    y: (e.clientY - rect.top)  * (specCanvas.height / rect.height),
+  };
+}
+
+function startSpecDraw(e) {
+  specDrawing = true;
+  const p = getSpecPos(e);
+  specLastX = p.x; specLastY = p.y;
+}
+
+function doSpecDraw(e) {
+  if (!specDrawing) return;
+  const p = getSpecPos(e);
+  specCtx.beginPath();
+  specCtx.moveTo(specLastX, specLastY);
+  specCtx.lineTo(p.x, p.y);
+  if (specTool === 'draw') {
+    specCtx.globalCompositeOperation = 'source-over';
+    specCtx.strokeStyle = 'rgba(251,191,36,0.75)';
+    specCtx.lineWidth   = 3;
+    specCtx.lineCap     = 'round';
+  } else {
+    specCtx.globalCompositeOperation = 'destination-out';
+    specCtx.lineWidth = 20;
+    specCtx.lineCap   = 'round';
+  }
+  specCtx.stroke();
+  specLastX = p.x; specLastY = p.y;
+}
+
+function stopSpecDraw() { specDrawing = false; }
+
+function setSpecTool(tool) {
+  specTool = tool;
+  ['draw', 'erase'].forEach(t => {
+    const btn = document.getElementById('stool-' + t);
+    if (btn) btn.classList.toggle('active', t === tool);
+  });
+}
+
+function clearSpecCanvas() {
+  if (!confirm('Clear your spectator notes?')) return;
+  specCtx.clearRect(0, 0, specCanvas.width, specCanvas.height);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  renderMap();
+  renderHealth('blue-health', 4, 4);
+  renderHealth('red-health',  4, 4);
+  logEvent('👁 Spectator view loaded — waiting for game state…', 'highlight');
+});
