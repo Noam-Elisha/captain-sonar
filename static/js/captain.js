@@ -25,8 +25,9 @@ let firstMateDone  = false;  // first mate has charged this turn
 let lastDirection  = null;   // direction of last move (null = no directional move needed)
 
 // Targeting modes
-let targetMode     = null;   // 'torpedo' | 'mine' | null
-let stealthMoves   = [];     // list of directions chosen for stealth
+let targetMode       = null;   // 'torpedo' | 'mine' | null
+let stealthDirection = null;   // chosen direction for stealth straight-line move
+let stealthSteps     = 1;      // how many steps (0–4)
 
 // Island set for fast lookup
 const ISLAND_SET = new Set(ISLANDS.map(([r,c]) => `${r},${c}`));
@@ -627,35 +628,50 @@ function submitDrone(sector) {
 
 // ── Stealth ───────────────────────────────────────────────────
 function openStealth() {
-  stealthMoves = [];
-  renderStealthMoves();
+  stealthDirection = null;
+  stealthSteps     = 1;
+  renderStealthUI();
   document.getElementById('stealth-modal').classList.remove('hidden');
 }
 function closeStealth() {
   document.getElementById('stealth-modal').classList.add('hidden');
-  stealthMoves = [];
 }
-function addStealthDir(dir) {
-  if (dir === '') { stealthMoves = []; renderStealthMoves(); return; } // stay in place
-  if (stealthMoves.length >= 4) return;
-  stealthMoves.push(dir);
-  renderStealthMoves();
+function setStealthDir(dir) {
+  stealthDirection = dir;
+  renderStealthUI();
 }
-function renderStealthMoves() {
-  const el = document.getElementById('stealth-move-list');
-  el.innerHTML = '';
-  stealthMoves.forEach((d, i) => {
-    const tag = document.createElement('span');
-    tag.className = 'stealth-tag';
-    tag.textContent = d;
-    tag.title = 'Click to remove';
-    tag.onclick = () => { stealthMoves.splice(i, 1); renderStealthMoves(); };
-    el.appendChild(tag);
+function setStealthSteps(n) {
+  stealthSteps = n;
+  renderStealthUI();
+}
+function renderStealthUI() {
+  ['north', 'south', 'west', 'east'].forEach(d => {
+    const btn = document.getElementById(`sdir-${d}`);
+    if (btn) btn.classList.toggle('active', d === stealthDirection);
   });
+  [0, 1, 2, 3, 4].forEach(n => {
+    const btn = document.getElementById(`ssteps-${n}`);
+    if (btn) btn.classList.toggle('active', n === stealthSteps);
+  });
+  const prev = document.getElementById('stealth-preview');
+  if (prev) {
+    if (stealthSteps === 0) {
+      prev.textContent = 'Stay in place (0 steps)';
+    } else if (stealthDirection === null) {
+      prev.textContent = 'Select a direction →';
+    } else {
+      const labels = {north: '↑ North', south: '↓ South', west: '← West', east: '→ East'};
+      prev.textContent = `Move ${stealthSteps} step${stealthSteps !== 1 ? 's' : ''} ${labels[stealthDirection]}`;
+    }
+  }
+  const execBtn = document.getElementById('btn-execute-stealth');
+  if (execBtn) execBtn.disabled = (stealthDirection === null && stealthSteps > 0);
 }
 function submitStealth() {
+  const dir   = stealthSteps === 0 ? 'north' : stealthDirection;  // direction irrelevant for 0 steps
+  const steps = stealthSteps;
   closeStealth();
-  socket.emit('captain_stealth', {game_id: GAME_ID, name: MY_NAME, moves: stealthMoves});
+  socket.emit('captain_stealth', {game_id: GAME_ID, name: MY_NAME, direction: dir, steps});
 }
 
 // ── UI helpers ────────────────────────────────────────────────

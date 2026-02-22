@@ -8,165 +8,220 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Engineering Board — Cross / Compass Layout
-   8 cols × 8 rows: corners are dir-labels, arms are nodes,
-   centre area spans 6×6 with compass decoration.
+   Engineering board: 4 direction columns × 6 node rows
+   Circuit lines drawn as SVG overlay connecting nodes
    ═══════════════════════════════════════════════════════════ */
 
-.eng-board-wrap {
+/* Outer wrapper: positions relative so SVG can overlay */
+.eng-wrap {
+  position: relative;
+  display: inline-block;   /* shrink-wrap to content */
+  margin: 0 auto;
+  padding: .5rem 1.25rem 1rem;
+  user-select: none;
+}
+
+/* SVG circuit lines overlay */
+.circuit-svg {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+}
+
+/* ── Direction column headers ─────────────────────────────── */
+.eng-col-headers {
   display: flex;
+  gap: 20px;
   justify-content: center;
-  padding: .75rem 1rem 1rem;
-  overflow: auto;
+  margin-bottom: .5rem;
 }
 
-/* 8×8 grid: col/row 1 = W-arm/N-arm, cols 2-7 = centre + N/S nodes, col 8 = E-arm */
-.eng-cross {
-  display: grid;
-  grid-template-columns: 44px repeat(6, 40px) 44px;
-  grid-template-rows:    44px repeat(6, 40px) 44px;
-  gap: 4px;
-  position: relative;
-}
-
-/* ── Direction corner labels ── */
-.dir-corner {
-  display: flex; align-items: center; justify-content: center;
-  font-size: .7rem; font-weight: 800; letter-spacing: .1em;
+.eng-dir-header {
+  width: 52px;
+  text-align: center;
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .05em;
   color: var(--text-muted);
-  border-radius: 8px;
-  padding: 2px;
-  user-select: none;
+  text-transform: uppercase;
+  padding: .25rem 0;
+  border-radius: 6px;
+  transition: color .2s, background .2s;
 }
-/* Active direction corner gets a glow */
-.dir-corner.active-arm {
-  color: var(--team-primary, var(--accent));
-}
-
-/* ── Centre area ── */
-.eng-center {
-  grid-column: 2 / 8;
-  grid-row:    2 / 8;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: .35rem;
-  padding: .5rem;
-}
-.eng-center .compass-rose {
-  font-size: 1.6rem;
-  opacity: .6;
-}
-.eng-center .center-label {
-  font-size: .7rem; color: var(--text-muted);
-  letter-spacing: .1em; text-align: center;
-}
-.eng-center .center-status {
-  font-size: .75rem; color: var(--accent);
-  font-style: italic; text-align: center;
-  min-height: 1.2em;
-}
-.eng-center .circuit-legend {
-  display: flex; gap: .5rem; margin-top: .2rem;
-}
-.eng-center .circ-dot {
-  width: 10px; height: 10px; border-radius: 2px;
+.eng-dir-header.active {
+  color: var(--accent);
+  background: rgba(6,182,212,.12);
 }
 
-/* ── Engineering nodes ── */
-.eng-node {
-  width: 40px; height: 40px;
-  border-radius: 7px;
-  border: 2px solid rgba(255,255,255,.08);
-  background: var(--bg-input);
-  cursor: default;
-  display: flex; align-items: center; justify-content: center;
-  font-size: .7rem; font-weight: 700;
-  transition: all .18s;
+/* ── Columns container ────────────────────────────────────── */
+.eng-cols {
+  display: flex;
+  gap: 20px;             /* space between W / N / S / E columns */
+  justify-content: center;
+  align-items: flex-start;
   position: relative;
-  user-select: none;
+  z-index: 1;
 }
 
-/* Unmarked node: translucent fill of the system colour */
-.eng-node.yellow    { background: rgba(234,179, 8,.18); border-color: rgba(234,179, 8,.35); --node-color: var(--col-yellow); }
-.eng-node.red       { background: rgba(239, 68,68,.18); border-color: rgba(239, 68,68,.35); --node-color: var(--col-red);    }
-.eng-node.green     { background: rgba( 34,197,94,.18); border-color: rgba( 34,197,94,.35); --node-color: var(--col-green);  }
-.eng-node.radiation { background: rgba(168, 85,247,.18); border-color: rgba(168,85,247,.35);--node-color: var(--col-radiation); font-size: .85rem; }
+/* Each direction column */
+.eng-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  position: relative;
+  padding: 4px 6px;
+  border-radius: 10px;
+  transition: background .2s;
+}
+.eng-col.active-col {
+  background: rgba(6,182,212,.07);
+  outline: 1.5px solid rgba(6,182,212,.25);
+}
 
-/* Circuit outline ring (overrides base border) */
-.eng-node.circuit-1 { outline: 2px solid #f97316; outline-offset: 1px; }  /* orange */
-.eng-node.circuit-2 { outline: 2px solid #06b6d4; outline-offset: 1px; }  /* cyan   */
-.eng-node.circuit-3 { outline: 2px solid #ec4899; outline-offset: 1px; }  /* pink   */
+/* Reactor divider inside each column (between index 2 and 3) */
+.reactor-divider-inline {
+  width: 100%;
+  text-align: center;
+  font-size: .55rem;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  opacity: .7;
+  border-top: 1px dashed rgba(255,255,255,.12);
+  padding-top: 4px;
+  margin-top: 1px;
+  margin-bottom: 1px;
+}
 
-/* Marked node: full system colour fill */
+/* ── Engineering nodes: CIRCULAR ─────────────────────────── */
+.eng-node {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;            /* ← CIRCULAR */
+  border: 2px solid rgba(255,255,255,.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  font-size: .6rem;
+  font-weight: 700;
+  transition: transform .15s, box-shadow .15s, filter .15s;
+  cursor: default;
+  flex-shrink: 0;
+}
+
+/* ── System colour fills (unmarked = translucent, marked = solid) */
+:root {
+  --col-red:       #ef4444;
+  --col-green:     #22c55e;
+  --col-yellow:    #eab308;
+  --col-radiation: #a855f7;
+}
+
+.eng-node.red {
+  background: rgba(239,68,68,.18);
+  border-color: rgba(239,68,68,.40);
+  --node-col: var(--col-red);
+}
+.eng-node.green {
+  background: rgba(34,197,94,.18);
+  border-color: rgba(34,197,94,.40);
+  --node-col: var(--col-green);
+}
+.eng-node.yellow {
+  background: rgba(234,179,8,.18);
+  border-color: rgba(234,179,8,.40);
+  --node-col: var(--col-yellow);
+}
+.eng-node.radiation {
+  background: rgba(168,85,247,.18);
+  border-color: rgba(168,85,247,.40);
+  --node-col: var(--col-radiation);
+}
+
+/* Marked = solid fill */
 .eng-node.marked {
-  background: var(--node-color) !important;
-  border-color: var(--node-color) !important;
-  color: rgba(0,0,0,.7);
-  font-size: .9rem;
+  background: var(--node-col) !important;
+  border-color: var(--node-col) !important;
+  box-shadow: 0 0 8px var(--node-col);
 }
-.eng-node.marked::after { content: '✕'; font-weight: 900; }
 
-/* Clickable state */
+/* ── Circuit ring outlines ────────────────────────────────── */
+.eng-node.circuit-1 { outline: 2px solid rgba(249,115,22,.70); outline-offset: 2px; }
+.eng-node.circuit-2 { outline: 2px solid rgba(6,182,212,.70);  outline-offset: 2px; }
+.eng-node.circuit-3 { outline: 2px solid rgba(236,72,153,.70); outline-offset: 2px; }
+
+/* ── Clickable glow ──────────────────────────────────────── */
 .eng-node.clickable {
   cursor: pointer;
-  box-shadow: 0 0 8px var(--node-color);
-  transform: scale(1.05);
+  box-shadow: 0 0 10px var(--node-col);
+  animation: pulse-glow 1.4s infinite alternate;
+}
+@keyframes pulse-glow {
+  from { box-shadow: 0 0 6px  var(--node-col); }
+  to   { box-shadow: 0 0 16px var(--node-col); }
 }
 .eng-node.clickable:hover {
-  background: var(--node-color) !important;
-  color: rgba(0,0,0,.8);
-  transform: scale(1.1);
+  transform: scale(1.12);
+  filter: brightness(1.25);
 }
 
-/* Active arm highlight: nodes in the active direction */
-.eng-node.active-arm {
-  box-shadow: 0 0 6px rgba(14,165,233,.5);
-  border-color: rgba(var(--team-primary-rgb, 37,99,235), .6);
+/* ── Radiation symbol ────────────────────────────────────── */
+.rad-sym {
+  font-size: 1.1rem;
+  opacity: .85;
+  z-index: 1;
+  position: relative;
 }
-.eng-node.active-arm.clickable {
-  box-shadow: 0 0 12px var(--node-color), 0 0 4px rgba(14,165,233,.6);
-}
+.eng-node.marked .rad-sym { color: #fff; }
 
-/* ── Circuit label badge ── */
+/* ── Circuit badge (C1/C2/C3 label) ─────────────────────── */
 .circuit-badge {
-  position: absolute; top: -5px; right: -5px;
-  font-size: .5rem; font-weight: 800; letter-spacing: .04em;
-  padding: 1px 3px; border-radius: 3px;
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
+  font-size: .42rem;
+  font-weight: 900;
+  letter-spacing: .02em;
   line-height: 1;
+  opacity: .85;
+  pointer-events: none;
 }
-.circuit-badge.c1 { background: #f97316; color: #fff; }
-.circuit-badge.c2 { background: #06b6d4; color: #000; }
-.circuit-badge.c3 { background: #ec4899; color: #fff; }
+.circuit-badge.c1 { color: #f97316; }
+.circuit-badge.c2 { color: #06b6d4; }
+.circuit-badge.c3 { color: #ec4899; }
+.eng-node.marked .circuit-badge { color: #fff; opacity: .7; }
 
-/* ── Damage flash on arm nodes ── */
-@keyframes damageFlash {
-  0%,100% { box-shadow: none; }
-  30%,70% { box-shadow: 0 0 14px rgba(220,38,38,.9); border-color: var(--red) !important; }
+/* ── Damage flash ─────────────────────────────────────────── */
+@keyframes damage-flash-anim {
+  0%   { background: #ff3333 !important; box-shadow: 0 0 20px #ff0000; }
+  100% { background: var(--node-col); }
 }
-.eng-node.damage-flash { animation: damageFlash .8s ease; }
+.eng-node.damage-flash {
+  animation: damage-flash-anim 0.9s ease-out !important;
+}
 
-/* ── Legend ── */
+/* ── Legend ──────────────────────────────────────────────── */
 .legend {
-  display: flex; gap: .9rem; align-items: center;
-  padding: .4rem 1rem .6rem; flex-wrap: wrap;
-  font-size: .73rem; color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem 1rem;
+  font-size: .72rem;
+  color: var(--text-muted);
+  padding: .5rem 1rem;
+  justify-content: center;
 }
-.legend .dot {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 14px; height: 14px; border-radius: 3px;
-  margin-right: .25rem; vertical-align: middle;
+.dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 3px;
 }
-.legend .dot.yellow    { background: var(--col-yellow); }
-.legend .dot.red       { background: var(--col-red);    }
-.legend .dot.green     { background: var(--col-green);  }
-.legend .dot.radiation { background: var(--col-radiation); font-size: .65rem; }
-
-.legend .circ-key {
-  display: inline-flex; align-items: center; gap: .2rem; margin-right: .2rem;
-}
-.legend .circ-swatch {
-  width: 10px; height: 10px; border-radius: 2px; display: inline-block;
-}
+.dot.red       { background: var(--col-red); }
+.dot.green     { background: var(--col-green); }
+.dot.yellow    { background: var(--col-yellow); }
+.dot.radiation { background: var(--col-radiation); }

@@ -299,20 +299,22 @@ def test_engineer_circuit_clear_no_damage():
     """Marking all C1 nodes should clear them without causing damage."""
     game = place_both(fresh_game())
     board = game["submarines"]["blue"]["engineering"]
-    # C1 nodes: west[0], west[1], west[2], east[1]
+    # C1 nodes: west[0], north[0], south[0], east[0]  — one per direction, all at index 0
     # Mark first 3 manually then verify circuit clears on 4th
-    board["west"][0]["marked"] = True
-    board["west"][1]["marked"] = True
-    board["west"][2]["marked"] = True
-    # Mark east[1] to complete C1
-    events = gs.engineer_mark_node(board, "east", 1)
+    board["west"][0]["marked"]  = True
+    board["north"][0]["marked"] = True
+    board["south"][0]["marked"] = True
+    # Mark east[0] to complete C1
+    events = gs.engineer_mark_node(board, "east", 0)
     circuit_ev = [e for e in events if e["type"] == "circuit_cleared"]
     damage_ev  = [e for e in events if "damage" in e["type"]]
     assert len(circuit_ev) == 1, f"Expected circuit_cleared, got: {events}"
     assert len(damage_ev)  == 0, f"Expected no damage on circuit clear, got: {events}"
     # All C1 nodes should be unmarked now
-    assert board["west"][0]["marked"] == False
-    assert board["east"][1]["marked"] == False
+    assert board["west"][0]["marked"]  == False
+    assert board["east"][0]["marked"]  == False
+    assert board["north"][0]["marked"] == False
+    assert board["south"][0]["marked"] == False
 
 
 def test_direction_damage_on_full_column():
@@ -481,7 +483,7 @@ def test_mine_detonate_deals_damage():
 def test_stealth_valid():
     game = place_both(fresh_game(), blue_pos=(5,4))
     game["submarines"]["blue"]["systems"]["stealth"] = 5
-    ok, msg, events = gs.captain_use_stealth(game, "blue", ["east", "east"])
+    ok, msg, events = gs.captain_use_stealth(game, "blue", "east", 2)
     assert ok, msg
     pos = game["submarines"]["blue"]["position"]
     assert pos == [5, 6]
@@ -490,7 +492,7 @@ def test_stealth_valid():
 def test_stealth_sets_eng_fm_done():
     game = place_both(fresh_game(), blue_pos=(5,4))
     game["submarines"]["blue"]["systems"]["stealth"] = 5
-    gs.captain_use_stealth(game, "blue", ["east"])
+    gs.captain_use_stealth(game, "blue", "east", 1)
     assert game["turn_state"]["engineer_done"] == True
     assert game["turn_state"]["first_mate_done"] == True
 
@@ -499,7 +501,7 @@ def test_stealth_no_direction_set():
     """Stealth doesn't set direction so end_turn allowed without wait."""
     game = place_both(fresh_game(), blue_pos=(5,4))
     game["submarines"]["blue"]["systems"]["stealth"] = 5
-    gs.captain_use_stealth(game, "blue", ["east"])
+    gs.captain_use_stealth(game, "blue", "east", 1)
     ok, msg, _ = gs.end_turn(game, "blue")
     assert ok, msg
 
@@ -507,9 +509,51 @@ def test_stealth_no_direction_set():
 def test_stealth_max_4_moves():
     game = place_both(fresh_game(), blue_pos=(5,4))
     game["submarines"]["blue"]["systems"]["stealth"] = 5
-    ok, msg, _ = gs.captain_use_stealth(game, "blue", ["east","east","east","east","east"])
+    ok, msg, _ = gs.captain_use_stealth(game, "blue", "east", 5)
     assert not ok
     assert "4" in msg
+
+
+def test_stealth_straight_line_only():
+    """Stealth must be a single direction — mixed directions not possible with new API."""
+    game = place_both(fresh_game(), blue_pos=(5,4))
+    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    # Invalid direction string
+    ok, msg, _ = gs.captain_use_stealth(game, "blue", "diagonal", 1)
+    assert not ok
+    assert "direction" in msg.lower() or "invalid" in msg.lower()
+
+
+def test_stealth_zero_steps():
+    """Stealth with 0 steps is valid (stay in place, but clear trail)."""
+    game = place_both(fresh_game(), blue_pos=(5,4))
+    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    ok, msg, events = gs.captain_use_stealth(game, "blue", "east", 0)
+    assert ok, msg
+    # Position unchanged
+    pos = game["submarines"]["blue"]["position"]
+    assert pos == [5, 4]
+    # eng_done + first_mate_done set
+    assert game["turn_state"]["engineer_done"] == True
+    assert game["turn_state"]["first_mate_done"] == True
+
+
+def test_stealth_cannot_revisit():
+    """Stealth cannot pass through a previously visited cell."""
+    game = place_both(fresh_game(), blue_pos=(5,4))
+    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    # Move east once normally, then try stealth back west through own trail
+    gs.captain_move(game, "blue", "east")
+    gs.engineer_mark(game, "blue", "east", 0)
+    gs.first_mate_charge(game, "blue", "torpedo")
+    gs.end_turn(game, "blue")
+    # Red's turn — advance past it
+    game["turn_index"] += 1
+    # Blue stealth west would pass through (5,4) which is in trail
+    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    ok, msg, _ = gs.captain_use_stealth(game, "blue", "west", 2)
+    assert not ok
+    assert "revisit" in msg.lower() or "cannot" in msg.lower()
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -580,6 +624,8 @@ if __name__ == "__main__":
         # Stealth
         test_stealth_valid, test_stealth_sets_eng_fm_done,
         test_stealth_no_direction_set, test_stealth_max_4_moves,
+        test_stealth_straight_line_only, test_stealth_zero_steps,
+        test_stealth_cannot_revisit,
         # Sonar/Drone
         test_sonar_result_has_correct_format, test_drone_result_boolean,
     ]

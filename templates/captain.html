@@ -50,19 +50,26 @@
 <!-- Stealth modal -->
 <div id="stealth-modal" class="modal hidden">
   <div class="modal-card">
-    <h3>👻 Stealth Move</h3>
-    <p>Choose up to 4 moves silently. Enemy won't hear your direction.</p>
-    <div class="stealth-moves" id="stealth-move-list"></div>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.8rem 0;">
-      <button class="move-add-btn" onclick="addStealthDir('north')">↑ N</button>
-      <button class="move-add-btn" onclick="addStealthDir('south')">↓ S</button>
-      <button class="move-add-btn" onclick="addStealthDir('west')">← W</button>
-      <button class="move-add-btn" onclick="addStealthDir('east')">→ E</button>
-      <button class="move-add-btn" onclick="addStealthDir('')">Stay (0)</button>
+    <h3>👻 Stealth (Silence)</h3>
+    <p>Move in a <strong>straight line</strong> — pick ONE direction and 0–4 steps.</p>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.8rem 0;justify-content:center;">
+      <button id="sdir-north" class="move-add-btn stealth-sel" onclick="setStealthDir('north')">↑ N</button>
+      <button id="sdir-south" class="move-add-btn stealth-sel" onclick="setStealthDir('south')">↓ S</button>
+      <button id="sdir-west"  class="move-add-btn stealth-sel" onclick="setStealthDir('west')">← W</button>
+      <button id="sdir-east"  class="move-add-btn stealth-sel" onclick="setStealthDir('east')">→ E</button>
     </div>
+    <div style="display:flex;gap:.5rem;margin:.6rem 0;justify-content:center;align-items:center;">
+      <span style="color:var(--text-muted);font-size:.85rem;margin-right:.3rem;">Steps:</span>
+      <button id="ssteps-0" class="move-add-btn stealth-sel" onclick="setStealthSteps(0)">0</button>
+      <button id="ssteps-1" class="move-add-btn stealth-sel active" onclick="setStealthSteps(1)">1</button>
+      <button id="ssteps-2" class="move-add-btn stealth-sel" onclick="setStealthSteps(2)">2</button>
+      <button id="ssteps-3" class="move-add-btn stealth-sel" onclick="setStealthSteps(3)">3</button>
+      <button id="ssteps-4" class="move-add-btn stealth-sel" onclick="setStealthSteps(4)">4</button>
+    </div>
+    <div id="stealth-preview" style="text-align:center;color:var(--accent);font-size:.9rem;min-height:1.5rem;margin:.4rem 0;"></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeStealth()">Cancel</button>
-      <button class="btn-confirm" onclick="submitStealth()">Execute</button>
+      <button id="btn-execute-stealth" class="btn-confirm" onclick="submitStealth()" disabled>Execute</button>
     </div>
   </div>
 </div>

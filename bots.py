@@ -118,7 +118,7 @@ class CaptainBot:
           ("torpedo", row, col)
           ("drone",   sector)
           ("sonar",   ask_row, ask_col, ask_sector)
-          ("stealth", [moves])
+          ("stealth", direction, steps)
           ("end_turn",)
           None  → nothing to do (should not happen in normal flow)
         """
@@ -174,9 +174,10 @@ class CaptainBot:
             if isinstance(stealth_charge, dict):
                 stealth_charge = stealth_charge.get("charge", 0)
             if stealth_charge >= SYSTEM_MAX_CHARGE["stealth"]:
-                stealth_moves = self._plan_stealth(r, c, trail_set, island_set, rows, cols, 4)
-                if stealth_moves:
-                    return ("stealth", stealth_moves)
+                result = self._plan_stealth(r, c, trail_set, island_set, rows, cols, 4)
+                if result:
+                    direction, steps = result
+                    return ("stealth", direction, steps)
             return ("surface",)
 
         # Use stealth when only 1-2 valid moves remain and stealth is ready
@@ -184,9 +185,10 @@ class CaptainBot:
         if isinstance(stealth_charge, dict):
             stealth_charge = stealth_charge.get("charge", 0)
         if stealth_charge >= SYSTEM_MAX_CHARGE["stealth"] and len(valid) <= 2:
-            stealth_moves = self._plan_stealth(r, c, trail_set, island_set, rows, cols, 4)
-            if len(stealth_moves) >= 2:
-                return ("stealth", stealth_moves)
+            result = self._plan_stealth(r, c, trail_set, island_set, rows, cols, 4)
+            if result and result[1] >= 2:
+                direction, steps = result
+                return ("stealth", direction, steps)
 
         # Greedy 1-step lookahead: maximise future valid moves
         best = max(
@@ -223,28 +225,44 @@ class CaptainBot:
         return (candidates[0][1], candidates[0][2])
 
     def _plan_stealth(self, r, c, trail_set, island_set, rows, cols, max_steps=4):
-        """Plan up to max_steps stealth moves toward open space."""
-        moves = []
-        cur_r, cur_c = r, c
-        cur_trail = set(trail_set)
+        """
+        Plan a straight-line stealth move (Silence rule: ONE direction only).
+        Returns (direction, steps) tuple, or None if no valid move exists.
+        Picks the direction that maximises open space at the destination.
+        """
+        best_direction = None
+        best_steps     = 0
+        best_score     = -1
 
-        for _ in range(max_steps):
-            valid = _get_valid_moves(cur_r, cur_c, cur_trail, island_set, rows, cols)
-            if not valid:
-                break
-            best = max(
-                valid,
-                key=lambda m: _count_future_moves(
-                    m[1], m[2],
-                    cur_trail | {(cur_r, cur_c)},
-                    island_set, rows, cols,
-                ),
-            )
-            moves.append(best[0])
-            cur_trail.add((cur_r, cur_c))
-            cur_r, cur_c = best[1], best[2]
+        for d in DIRECTIONS:
+            dr, dc = direction_delta(d)
+            cur_r, cur_c = r, c
+            visited = set(trail_set)   # trail already contains current position
+            steps = 0
 
-        return moves
+            for _ in range(max_steps):
+                nr, nc = cur_r + dr, cur_c + dc
+                if nr < 0 or nr >= rows or nc < 0 or nc >= cols:
+                    break
+                if (nr, nc) in island_set:
+                    break
+                if (nr, nc) in visited:
+                    break
+                visited.add((nr, nc))
+                cur_r, cur_c = nr, nc
+                steps += 1
+
+            if steps > 0:
+                future = _count_future_moves(cur_r, cur_c, visited, island_set, rows, cols)
+                score  = future * 10 + steps
+                if score > best_score:
+                    best_score     = score
+                    best_direction = d
+                    best_steps     = steps
+
+        if best_direction is None:
+            return None
+        return (best_direction, best_steps)
 
 
 # ── First Mate Bot ─────────────────────────────────────────────────────────────

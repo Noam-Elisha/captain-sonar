@@ -1,49 +1,72 @@
 /* ============================================================
    Captain Sonar — engineer.js
+   Engineering board: 4 direction columns × 6 node rows,
+   with SVG circuit lines connecting nodes across all 4 directions.
    ============================================================ */
-
-// GAME_ID, MY_NAME, MY_TEAM injected by template
 
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
 
-// Engineering board layout (mirrors game_state.py)
+// Engineering board layout — mirrors game_state.py ENGINEERING_LAYOUT exactly
+// Indices 0-2: circuit nodes (C1=red, C2=green, C3=yellow) one per direction
+// Indices 3-4: extra non-circuit Central Circuit nodes
+// Index  5:   radiation (reactor)
 const ENG_LAYOUT = {
   west:  [
-    {color:'yellow', circuit:1}, {color:'red',    circuit:1},
-    {color:'green',  circuit:1}, {color:'green',  circuit:null},
-    {color:'radiation', circuit:null}, {color:'radiation', circuit:null},
+    {color:'red',       circuit:1},    // 0  mine/torpedo  C1
+    {color:'green',     circuit:2},    // 1  sonar/drone   C2
+    {color:'yellow',    circuit:3},    // 2  stealth        C3
+    {color:'yellow',    circuit:null}, // 3  stealth (extra)
+    {color:'red',       circuit:null}, // 4  mine/torpedo (extra)
+    {color:'radiation', circuit:null}, // 5  reactor
   ],
   north: [
-    {color:'red',    circuit:2}, {color:'red',    circuit:null},
-    {color:'green',  circuit:null}, {color:'yellow', circuit:2},
-    {color:'yellow', circuit:2}, {color:'radiation', circuit:null},
+    {color:'red',       circuit:1},
+    {color:'green',     circuit:2},
+    {color:'yellow',    circuit:3},
+    {color:'red',       circuit:null},
+    {color:'green',     circuit:null},
+    {color:'radiation', circuit:null},
   ],
   south: [
-    {color:'red',    circuit:3}, {color:'red',    circuit:null},
-    {color:'green',  circuit:3}, {color:'yellow', circuit:3},
-    {color:'yellow', circuit:null}, {color:'radiation', circuit:null},
+    {color:'red',       circuit:1},
+    {color:'green',     circuit:2},
+    {color:'yellow',    circuit:3},
+    {color:'green',     circuit:null},
+    {color:'yellow',    circuit:null},
+    {color:'radiation', circuit:null},
   ],
-  east: [
-    {color:'yellow', circuit:3}, {color:'red',    circuit:1},
-    {color:'green',  circuit:2}, {color:'green',  circuit:null},
-    {color:'radiation', circuit:null}, {color:'radiation', circuit:null},
+  east:  [
+    {color:'red',       circuit:1},
+    {color:'green',     circuit:2},
+    {color:'yellow',    circuit:3},
+    {color:'yellow',    circuit:null},
+    {color:'red',       circuit:null},
+    {color:'radiation', circuit:null},
   ],
 };
 
-const DIRECTIONS  = ['west','north','south','east'];
-const DIR_ARROWS  = {west:'←', north:'↑', south:'↓', east:'→'};
+const DIR_ORDER   = ['west', 'north', 'south', 'east'];
+const DIR_LABELS  = {west: '← W', north: '↑ N', south: '↓ S', east: 'E →'};
+const CIRCUIT_COLORS = {1: '#f97316', 2: '#06b6d4', 3: '#ec4899'};
 
-let board         = null;   // will be set from server
-let activeDir     = null;   // direction we need to mark this turn
-let canMark       = false;
-let myHealth      = 4;
-let enemyHealth   = 4;
+const COLOR_LABELS = {
+  red:       'Mine / Torpedo',
+  green:     'Sonar / Drone',
+  yellow:    'Stealth',
+  radiation: 'Radiation (reactor)',
+};
+
+let board       = null;
+let activeDir   = null;
+let canMark     = false;
+let myHealth    = 4;
+let enemyHealth = 4;
 
 const socket = io();
 
 socket.on('connect', () => {
-  socket.emit('join_room', {game_id: GAME_ID});
-  socket.emit('join_game', {game_id: GAME_ID, name: MY_NAME});
+  socket.emit('join_room',  {game_id: GAME_ID});
+  socket.emit('join_game',  {game_id: GAME_ID, name: MY_NAME});
 });
 
 socket.on('game_state', state => {
@@ -57,9 +80,9 @@ socket.on('game_state', state => {
   if (enemySub) enemyHealth = enemySub.health;
 
   const isMyTurn = (state.current_team === MY_TEAM);
-  const moved    = state.turn_state && state.turn_state.moved;
-  const engDone  = state.turn_state && state.turn_state.engineer_done;
-  const dir      = state.turn_state && state.turn_state.direction;
+  const moved    = state.turn_state?.moved;
+  const engDone  = state.turn_state?.engineer_done;
+  const dir      = state.turn_state?.direction;
 
   activeDir = (isMyTurn && moved && !engDone && dir) ? dir : null;
   canMark   = !!activeDir;
@@ -73,12 +96,12 @@ socket.on('direction_to_mark', data => {
   canMark   = true;
   updateStatus();
   renderBoard();
-  logEvent(`Mark a node in the ${data.direction.toUpperCase()} section!`, 'highlight');
+  logEvent(`⚡ Mark a node in the ${data.direction.toUpperCase()} column!`, 'highlight');
 });
 
 socket.on('board_update', data => {
-  board   = data.board;
-  canMark = false;
+  board     = data.board;
+  canMark   = false;
   activeDir = null;
   renderBoard();
   updateStatus();
@@ -90,34 +113,37 @@ socket.on('turn_start', data => {
   activeDir = null;
   renderBoard();
   updateStatus();
-  logEvent(data.team === MY_TEAM ? 'OUR TURN — wait for captain to move' : `${data.team} team's turn`);
+  logEvent(data.team === MY_TEAM ? '🔔 OUR TURN — wait for captain to move' : `${data.team} team's turn`);
 });
 
 socket.on('damage', data => {
   if (data.team === MY_TEAM) myHealth    = data.health;
   else                        enemyHealth = data.health;
   renderHealth();
-
   if (data.team === MY_TEAM) {
-    // Flash the relevant direction column if applicable
-    if (data.cause === 'direction_damage' && data.direction) {
-      flashDir(data.direction);
-    }
+    if (data.cause === 'direction_damage' && data.direction) flashDir(data.direction);
     logEvent(`💥 Engineering damage! −${data.amount} HP (${data.health} left)`, 'danger');
   } else {
     logEvent(`💥 Enemy took ${data.amount} damage`);
   }
 });
 
+socket.on('circuit_cleared', data => {
+  if (data.team === MY_TEAM) {
+    logEvent(`✅ Circuit C${data.circuit} self-repaired!`, 'highlight');
+    renderBoard();
+  }
+});
+
 socket.on('surface_announced', data => {
   if (data.team === MY_TEAM) { myHealth = data.health; renderHealth(); }
   else { enemyHealth = data.health; renderHealth(); }
-  logEvent(`${data.team} surfaced in sector ${data.sector}`);
+  logEvent(`🌊 ${data.team} surfaced in sector ${data.sector}`);
 });
 
 socket.on('game_over', data => {
   const won = data.winner === MY_TEAM;
-  logEvent(`GAME OVER — ${data.winner} wins!`, 'highlight');
+  logEvent(`🏁 GAME OVER — ${data.winner} wins!`, 'highlight');
   showToast(won ? '🏆 Victory!' : '💀 Defeat…', !won);
 });
 
@@ -125,15 +151,11 @@ socket.on('error', data => showToast(data.msg, true));
 
 socket.on('bot_chat', data => {
   const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
-  const icon = icons[data.role] || '🤖';
-  logEvent(`${icon} [${data.name}]: ${data.msg}`, 'bot');
+  logEvent(`${icons[data.role]||'🤖'} [${data.name}]: ${data.msg}`, 'bot');
 });
 
-// ── Render ────────────────────────────────────────────────────
-function renderAll() {
-  renderHealth();
-  renderBoard();
-}
+// ── Render all ────────────────────────────────────────────────
+function renderAll() { renderHealth(); renderBoard(); }
 
 function renderHealth() {
   renderHearts('own-health',   myHealth,    4);
@@ -142,6 +164,7 @@ function renderHealth() {
 
 function renderHearts(id, hp, max) {
   const el = document.getElementById(id);
+  if (!el) return;
   el.innerHTML = '';
   for (let i = 0; i < max; i++) {
     const s = document.createElement('span');
@@ -151,152 +174,150 @@ function renderHearts(id, hp, max) {
   }
 }
 
-// Node grid positions in the CSS grid (0-indexed [row, col]):
-//   North arm : row 0, cols 1-6  → CSS grid-row 1, grid-col 2-7
-//   West arm  : rows 1-6, col 0  → CSS grid-row 2-7, grid-col 1
-//   East arm  : rows 1-6, col 7  → CSS grid-row 2-7, grid-col 8
-//   South arm : row 7, cols 1-6  → CSS grid-row 8, grid-col 2-7
-const NODE_GRID = {
-  north: (i) => ({ row: 1,   col: i + 2 }),  // i=0..5 → col 2-7
-  south: (i) => ({ row: 8,   col: i + 2 }),
-  west:  (i) => ({ row: i + 2, col: 1 }),     // i=0..5 → row 2-7
-  east:  (i) => ({ row: i + 2, col: 8 }),
-};
-
+// ── Board render ──────────────────────────────────────────────
 function renderBoard() {
   const container = document.getElementById('eng-board');
   container.innerHTML = '';
 
-  // Wrap in a centred flex div
   const wrap = document.createElement('div');
-  wrap.className = 'eng-board-wrap';
+  wrap.className = 'eng-wrap';
+  wrap.id        = 'eng-wrap';
 
-  // Outer CSS grid (8 cols × 8 rows)
-  const grid = document.createElement('div');
-  grid.className = 'eng-cross';
-  grid.id = 'eng-cross';
-
-  // Helper: place an element at a CSS grid position
-  function place(el, row, col) {
-    el.style.gridRow    = row;
-    el.style.gridColumn = col;
-    grid.appendChild(el);
-  }
-
-  // ── Corner / direction labels ──
-  const CORNER_LABELS = [
-    { row:1, col:1, text:'←W', dir:'west'  },
-    { row:1, col:8, text:'E→', dir:'east'  },
-    { row:8, col:1, text:'←W', dir:'west'  },
-    { row:8, col:8, text:'E→', dir:'east'  },
-  ];
-  // North header row (row 0 in grid = row 1 in CSS)
-  const nHdr = document.createElement('div');
-  nHdr.style.gridRow = 1; nHdr.style.gridColumn = '2 / 8';
-  nHdr.className = 'dir-corner' + (activeDir==='north' ? ' active-arm' : '');
-  nHdr.textContent = '↑ NORTH';
-  grid.appendChild(nHdr);
-
-  // South header row
-  const sHdr = document.createElement('div');
-  sHdr.style.gridRow = 8; sHdr.style.gridColumn = '2 / 8';
-  sHdr.className = 'dir-corner' + (activeDir==='south' ? ' active-arm' : '');
-  sHdr.textContent = '↓ SOUTH';
-  grid.appendChild(sHdr);
-
-  CORNER_LABELS.forEach(({row, col, text, dir}) => {
-    const lbl = document.createElement('div');
-    lbl.className = 'dir-corner' + (activeDir===dir ? ' active-arm' : '');
-    lbl.textContent = text;
-    place(lbl, row, col);
+  // Direction column headers
+  const headers = document.createElement('div');
+  headers.className = 'eng-col-headers';
+  DIR_ORDER.forEach(dir => {
+    const h = document.createElement('div');
+    h.className = `eng-dir-header${activeDir === dir ? ' active' : ''}`;
+    h.textContent = DIR_LABELS[dir];
+    headers.appendChild(h);
   });
+  wrap.appendChild(headers);
 
-  // ── Centre area ──
-  const center = document.createElement('div');
-  center.className = 'eng-center';
-  center.style.gridRow    = '2 / 8';
-  center.style.gridColumn = '2 / 8';
+  // Node columns container
+  const colsWrap = document.createElement('div');
+  colsWrap.className = 'eng-cols';
+  colsWrap.id        = 'eng-cols';
 
-  const rose = document.createElement('div');
-  rose.className = 'compass-rose';
-  rose.textContent = '🧭';
+  DIR_ORDER.forEach(dir => {
+    const col = document.createElement('div');
+    col.className  = `eng-col${activeDir === dir ? ' active-col' : ''}`;
+    col.dataset.dir = dir;
 
-  const clabel = document.createElement('div');
-  clabel.className = 'center-label';
-  clabel.textContent = 'ENGINEERING';
+    const serverNodes = board?.[dir];
 
-  const cstatus = document.createElement('div');
-  cstatus.className = 'center-status';
-  cstatus.id = 'center-status-text';
-  cstatus.textContent = activeDir
-    ? `Mark a node in ${activeDir.toUpperCase()} →`
-    : 'Waiting…';
+    ENG_LAYOUT[dir].forEach((def, idx) => {
+      // Insert REACTOR divider between index 2 and 3
+      if (idx === 3) {
+        const divider = document.createElement('div');
+        divider.className = 'reactor-divider-inline';
+        divider.innerHTML = '<span>⚛</span>';
+        col.appendChild(divider);
+      }
 
-  // Circuit key inside centre
-  const ckey = document.createElement('div');
-  ckey.className = 'circuit-legend';
-  [['c1','#f97316'],['c2','#06b6d4'],['c3','#ec4899']].forEach(([cls, col]) => {
-    const d = document.createElement('div');
-    d.className = 'circ-dot';
-    d.style.background = col;
-    d.style.borderRadius = '2px';
-    d.title = cls.toUpperCase();
-    ckey.appendChild(d);
-  });
-
-  center.appendChild(rose);
-  center.appendChild(clabel);
-  center.appendChild(cstatus);
-  center.appendChild(ckey);
-  grid.appendChild(center);
-
-  // ── Arm nodes ──
-  DIRECTIONS.forEach(dir => {
-    const layout     = ENG_LAYOUT[dir];
-    const serverNodes = board && board[dir];
-
-    layout.forEach((def, idx) => {
-      const gp      = NODE_GRID[dir](idx);
-      const marked  = serverNodes ? serverNodes[idx].marked : false;
-      const isActive = (dir === activeDir);
+      const marked      = serverNodes?.[idx]?.marked ?? false;
+      const isActive    = (dir === activeDir);
+      const isClickable = canMark && isActive && !marked;
 
       const node = document.createElement('div');
-      node.id = `node-${dir}-${idx}`;
-      node.className = 'eng-node ' + def.color
-        + (def.circuit ? ` circuit-${def.circuit}` : '')
-        + (marked       ? ' marked'     : '')
-        + (isActive     ? ' active-arm' : '');
+      node.id        = `node-${dir}-${idx}`;
+      node.className = [
+        'eng-node',
+        def.color,
+        def.circuit ? `circuit-${def.circuit}` : 'no-circuit',
+        idx < 3 ? 'cc-zone' : 'reactor-zone',
+        marked      ? 'marked'    : '',
+        isClickable ? 'clickable' : '',
+      ].filter(Boolean).join(' ');
 
-      node.title = `${dir.toUpperCase()} [${idx}] — ${def.color}`
-        + (def.circuit ? ` · Circuit ${def.circuit}` : '');
+      node.dataset.dir = dir;
+      node.dataset.idx = idx;
+      node.title = `${dir.toUpperCase()} [${idx}] — ${COLOR_LABELS[def.color] || def.color}`
+        + (def.circuit ? ` · Circuit C${def.circuit}` : '');
 
-      if (def.color === 'radiation') node.textContent = '☢';
+      if (def.color === 'radiation') {
+        const sym = document.createElement('span');
+        sym.className   = 'rad-sym';
+        sym.textContent = '☢';
+        node.appendChild(sym);
+      }
 
-      // Circuit badge
       if (def.circuit !== null) {
-        const badge = document.createElement('div');
-        badge.className = `circuit-badge c${def.circuit}`;
-        badge.textContent = 'C' + def.circuit;
+        const badge = document.createElement('span');
+        badge.className   = `circuit-badge c${def.circuit}`;
+        badge.textContent = `C${def.circuit}`;
         node.appendChild(badge);
       }
 
-      // Clickable only when it's the active direction and not yet marked
-      if (canMark && isActive && !marked) {
-        node.classList.add('clickable');
-        node.addEventListener('click', () => markNode(dir, idx));
-      }
+      if (isClickable) node.addEventListener('click', () => markNode(dir, idx));
+      col.appendChild(node);
+    });
 
-      place(node, gp.row, gp.col);
+    colsWrap.appendChild(col);
+  });
+
+  wrap.appendChild(colsWrap);
+  container.appendChild(wrap);
+
+  // Draw SVG circuit lines after DOM is rendered
+  requestAnimationFrame(drawCircuitLines);
+}
+
+// ── SVG circuit lines ─────────────────────────────────────────
+function drawCircuitLines() {
+  const wrap = document.getElementById('eng-wrap');
+  if (!wrap) return;
+  wrap.querySelectorAll('.circuit-svg').forEach(s => s.remove());
+
+  const wrapRect = wrap.getBoundingClientRect();
+  if (wrapRect.width === 0) return;
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.className = 'circuit-svg';
+  svg.setAttribute('width',  wrapRect.width);
+  svg.setAttribute('height', wrapRect.height);
+
+  [1, 2, 3].forEach(cid => {
+    const nodeIdx = cid - 1;
+    const pts = DIR_ORDER.map(dir => {
+      const el = document.getElementById(`node-${dir}-${nodeIdx}`);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        x: +(r.left - wrapRect.left + r.width  / 2).toFixed(1),
+        y: +(r.top  - wrapRect.top  + r.height / 2).toFixed(1),
+      };
+    }).filter(Boolean);
+
+    if (pts.length < 2) return;
+
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    poly.setAttribute('points',         pts.map(p => `${p.x},${p.y}`).join(' '));
+    poly.setAttribute('stroke',         CIRCUIT_COLORS[cid]);
+    poly.setAttribute('stroke-width',   '3.5');
+    poly.setAttribute('stroke-opacity', '0.60');
+    poly.setAttribute('fill',           'none');
+    poly.setAttribute('stroke-linecap', 'round');
+    poly.setAttribute('stroke-linejoin','round');
+    svg.appendChild(poly);
+
+    // Small glow dots at node centres
+    pts.forEach(p => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx',           p.x);
+      c.setAttribute('cy',           p.y);
+      c.setAttribute('r',            '6');
+      c.setAttribute('fill',         CIRCUIT_COLORS[cid]);
+      c.setAttribute('fill-opacity', '0.35');
+      svg.appendChild(c);
     });
   });
 
-  wrap.appendChild(grid);
-  container.appendChild(wrap);
+  wrap.appendChild(svg);
 }
 
 function flashDir(dir) {
-  const layout = ENG_LAYOUT[dir];
-  layout.forEach((_, idx) => {
+  ENG_LAYOUT[dir].forEach((_, idx) => {
     const node = document.getElementById(`node-${dir}-${idx}`);
     if (node) {
       node.classList.add('damage-flash');
@@ -305,17 +326,18 @@ function flashDir(dir) {
   });
 }
 
-function markNode(direction, index) {
-  if (!canMark || direction !== activeDir) return;
-  canMark = false;   // optimistic lock
-  socket.emit('engineer_mark', {game_id: GAME_ID, name: MY_NAME, direction, index});
-  renderBoard();     // re-render without clickable
+function markNode(dir, idx) {
+  if (!canMark || dir !== activeDir) return;
+  canMark = false;
+  socket.emit('engineer_mark', {game_id: GAME_ID, name: MY_NAME, direction: dir, index: idx});
+  renderBoard();
 }
 
 function updateStatus() {
   const el = document.getElementById('eng-status');
+  if (!el) return;
   if (canMark && activeDir) {
-    el.textContent = `Mark a node in the ${activeDir.toUpperCase()} section ↓`;
+    el.textContent = `⚡ Mark a node in the ${activeDir.toUpperCase()} column`;
     el.style.color = 'var(--accent)';
   } else {
     el.textContent = 'Waiting for captain to move…';
@@ -323,7 +345,6 @@ function updateStatus() {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────
 function logEvent(msg, cls) {
   const log   = document.getElementById('event-log');
   const entry = document.createElement('div');

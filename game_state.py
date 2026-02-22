@@ -3,14 +3,26 @@ Captain Sonar – Server-side game state (turn-based mode).
 
 Engineering board layout (Map Alpha standard):
   Each direction section has 6 nodes indexed 0-5.
-  Circuits span across directions – when all nodes in a circuit are marked, they clear (no damage).
-  Filling an entire direction section → 1 hull damage + clear that section.
-  Filling all 6 radiation nodes (across all sections) → 1 hull damage + clear radiation.
+  Indices 0-2: Central Circuit nodes (one per circuit C1/C2/C3, span all 4 directions).
+  Indices 3-4: Extra non-circuit Central Circuit nodes (block system until surfacing).
+  Index  5:   Reactor/radiation node.
 
-  WEST  : [yellow/c1, red/c1, green/c1, green, radiation, radiation]
-  NORTH : [red/c2, red, green, yellow/c2, yellow/c2, radiation]
-  SOUTH : [red/c3, red, green/c3, yellow/c3, yellow, radiation]
-  EAST  : [yellow/c3, red/c1, green/c2, green, radiation, radiation]
+  ALL directions use same structure:
+    0: red/C1   → mine+torpedo system
+    1: green/C2 → sonar+drone system
+    2: yellow/C3 → stealth system
+    3: extra non-circuit node (system varies by direction)
+    4: extra non-circuit node (system varies by direction)
+    5: radiation (reactor)
+
+  Circuits span all 4 directions (one node per direction per circuit):
+    C1 (orange): N[0], S[0], E[0], W[0]  – mine/torpedo nodes
+    C2 (cyan):   N[1], S[1], E[1], W[1]  – sonar/drone nodes
+    C3 (pink):   N[2], S[2], E[2], W[2]  – stealth nodes
+
+  When all 4 nodes of a circuit are marked → they self-clear (no damage).
+  When all 4 direction nodes in one panel are marked → 1 damage + clear that panel.
+  When all radiation nodes (4 total, one per direction) are marked → 1 damage + clear radiation.
 
 System charge costs (First Mate charges per captain move):
   torpedo : 3   mine : 3   sonar : 3   drone : 4   stealth : 5
@@ -19,62 +31,76 @@ Torpedo range: Manhattan distance ≤ 4.
   Direct hit (same cell): 2 damage.   Adjacent (distance 1): 1 damage.
 
 Surface: clear trail, take 1 damage, announce sector.
+Silence: move up to 4 spaces in ONE straight line (same direction only).
+Systems: blocked if any node of corresponding color is marked in engineer board.
+         A team cannot activate two systems in the same turn.
 """
 
 from maps import get_sector, MAPS
 import copy
 
 # ── Engineering board definition ──────────────────────────────────────────────
+# Node color → which systems it affects when marked:
+#   red    → mine + torpedo
+#   green  → sonar + drone
+#   yellow → stealth (silence)
+#   radiation → reactor (all radiation marked → damage)
 
 ENGINEERING_LAYOUT = {
-    "west":  [
-        {"color": "yellow",    "circuit": 1},
-        {"color": "red",       "circuit": 1},
-        {"color": "green",     "circuit": 1},
-        {"color": "green",     "circuit": None},
-        {"color": "radiation", "circuit": None},
-        {"color": "radiation", "circuit": None},
+    "west": [
+        {"color": "red",       "circuit": 1},   # 0  mine/torpedo  C1
+        {"color": "green",     "circuit": 2},   # 1  sonar/drone   C2
+        {"color": "yellow",    "circuit": 3},   # 2  stealth        C3
+        {"color": "yellow",    "circuit": None}, # 3  stealth (extra)
+        {"color": "red",       "circuit": None}, # 4  mine/torpedo (extra)
+        {"color": "radiation", "circuit": None}, # 5  reactor
     ],
     "north": [
-        {"color": "red",       "circuit": 2},
-        {"color": "red",       "circuit": None},
-        {"color": "green",     "circuit": None},
-        {"color": "yellow",    "circuit": 2},
-        {"color": "yellow",    "circuit": 2},
-        {"color": "radiation", "circuit": None},
+        {"color": "red",       "circuit": 1},   # 0  mine/torpedo  C1
+        {"color": "green",     "circuit": 2},   # 1  sonar/drone   C2
+        {"color": "yellow",    "circuit": 3},   # 2  stealth        C3
+        {"color": "red",       "circuit": None}, # 3  mine/torpedo (extra)
+        {"color": "green",     "circuit": None}, # 4  sonar/drone (extra)
+        {"color": "radiation", "circuit": None}, # 5  reactor
     ],
     "south": [
-        {"color": "red",       "circuit": 3},
-        {"color": "red",       "circuit": None},
-        {"color": "green",     "circuit": 3},
-        {"color": "yellow",    "circuit": 3},
-        {"color": "yellow",    "circuit": None},
-        {"color": "radiation", "circuit": None},
+        {"color": "red",       "circuit": 1},   # 0  mine/torpedo  C1
+        {"color": "green",     "circuit": 2},   # 1  sonar/drone   C2
+        {"color": "yellow",    "circuit": 3},   # 2  stealth        C3
+        {"color": "green",     "circuit": None}, # 3  sonar/drone (extra)
+        {"color": "yellow",    "circuit": None}, # 4  stealth (extra)
+        {"color": "radiation", "circuit": None}, # 5  reactor
     ],
-    "east":  [
-        {"color": "yellow",    "circuit": 3},
-        {"color": "red",       "circuit": 1},
-        {"color": "green",     "circuit": 2},
-        {"color": "green",     "circuit": None},
-        {"color": "radiation", "circuit": None},
-        {"color": "radiation", "circuit": None},
+    "east": [
+        {"color": "red",       "circuit": 1},   # 0  mine/torpedo  C1
+        {"color": "green",     "circuit": 2},   # 1  sonar/drone   C2
+        {"color": "yellow",    "circuit": 3},   # 2  stealth        C3
+        {"color": "yellow",    "circuit": None}, # 3  stealth (extra)
+        {"color": "red",       "circuit": None}, # 4  mine/torpedo (extra)
+        {"color": "radiation", "circuit": None}, # 5  reactor
     ],
 }
 
-# circuit_id → list of (direction, index) pairs
+# circuit_id → list of (direction, index) pairs – each circuit spans all 4 directions
 CIRCUITS = {
-    1: [("west", 0), ("west", 1), ("west", 2), ("east", 1)],
-    2: [("north", 0), ("north", 3), ("north", 4), ("east", 2)],
-    3: [("south", 0), ("south", 2), ("south", 3), ("east", 0)],
+    1: [("north", 0), ("south", 0), ("east", 0), ("west", 0)],  # red:  mine/torpedo
+    2: [("north", 1), ("south", 1), ("east", 1), ("west", 1)],  # green: sonar/drone
+    3: [("north", 2), ("south", 2), ("east", 2), ("west", 2)],  # yellow: stealth
 }
 
-# Radiation node positions
+# Radiation node positions (one per direction = 4 total)
 RADIATION_NODES = [
-    ("west", 4), ("west", 5),
-    ("north", 5),
-    ("south", 5),
-    ("east", 4), ("east", 5),
+    ("west", 5), ("north", 5), ("south", 5), ("east", 5),
 ]
+
+# Node color → systems it blocks when marked
+SYSTEM_COLORS = {
+    "torpedo": "red",
+    "mine":    "red",
+    "sonar":   "green",
+    "drone":   "green",
+    "stealth": "yellow",
+}
 
 SYSTEM_MAX_CHARGE = {
     "torpedo": 3,
@@ -144,6 +170,18 @@ def get_available_nodes(board, direction):
     return [i for i, n in enumerate(board[direction]) if not n["marked"]]
 
 
+def is_system_blocked(board, system):
+    """Return True if any engineer node for this system is currently marked."""
+    target_color = SYSTEM_COLORS.get(system)
+    if not target_color:
+        return False
+    for direction, nodes in board.items():
+        for node in nodes:
+            if node["color"] == target_color and node["marked"]:
+                return True
+    return False
+
+
 # ── Submarine State ────────────────────────────────────────────────────────────
 
 def make_submarine(team):
@@ -191,6 +229,7 @@ def make_turn_state():
         "waiting_for":     None,    # None | "sonar_response" | "drone_response"
         "sonar_query":     None,    # {row, col, sector} asked values
         "drone_query":     None,    # {sector} asked value
+        "system_used":     False,   # a system was already activated this turn
     }
 
 
@@ -399,24 +438,41 @@ def _use_system(sub, system):
     sub["systems"][system] = 0
 
 
+def has_valid_move(game, team):
+    """Return True if the submarine has at least one legal direction to move."""
+    sub = game["submarines"][team]
+    r, c = sub["position"]
+    for direction in ("north", "south", "east", "west"):
+        dr, dc = direction_delta(direction)
+        nr, nc = r + dr, c + dc
+        if is_valid_position(game, nr, nc) and [nr, nc] not in sub["trail"]:
+            return True
+    return False
+
+
 def captain_fire_torpedo(game, team, target_row, target_col):
     """Fire a torpedo. Returns (ok, error_msg, events)."""
     if current_team(game) != team:
         return False, "Not your turn", []
     if game["phase"] != "playing":
         return False, "Game not active", []
+    if game["turn_state"]["system_used"]:
+        return False, "Already used a system this turn – move first", []
     sub = game["submarines"][team]
     if not _check_charge(sub, "torpedo"):
         return False, "Torpedo not charged", []
+    if is_system_blocked(sub["engineering"], "torpedo"):
+        return False, "Torpedo blocked by engineer breakdown (red nodes marked)", []
     if not is_valid_position(game, target_row, target_col):
         return False, "Invalid target", []
 
     r, c = sub["position"]
     dist = abs(target_row - r) + abs(target_col - c)
-    if dist > 4:
-        return False, "Target out of torpedo range (max 4)", []
+    if dist > 4 or dist == 0:
+        return False, "Torpedo range: 1–4 spaces (Manhattan distance)", []
 
     _use_system(sub, "torpedo")
+    game["turn_state"]["system_used"] = True
     events = [{"type": "torpedo_fired", "team": team, "row": target_row, "col": target_col}]
     events += _apply_explosion(game, team, target_row, target_col)
     game["log"].append({"type": "torpedo", "team": team, "row": target_row, "col": target_col})
@@ -427,9 +483,13 @@ def captain_place_mine(game, team, target_row, target_col):
     """Place a mine on an adjacent cell. Returns (ok, error_msg, events)."""
     if current_team(game) != team:
         return False, "Not your turn", []
+    if game["turn_state"]["system_used"]:
+        return False, "Already used a system this turn – move first", []
     sub = game["submarines"][team]
     if not _check_charge(sub, "mine"):
         return False, "Mine not charged", []
+    if is_system_blocked(sub["engineering"], "mine"):
+        return False, "Mine blocked by engineer breakdown (red nodes marked)", []
     if not is_valid_position(game, target_row, target_col):
         return False, "Invalid target", []
 
@@ -438,11 +498,12 @@ def captain_place_mine(game, team, target_row, target_col):
     if dist != 1:
         return False, "Mine must be placed on an adjacent cell", []
 
-    # Can't place on trail (including current pos)
+    # Can't place on route (trail lines) – rulebook explicit
     if [target_row, target_col] in sub["trail"]:
-        return False, "Cannot place mine on a cell already in your trail", []
+        return False, "Cannot place mine on a cell already in your route", []
 
     _use_system(sub, "mine")
+    game["turn_state"]["system_used"] = True
     sub["mines"].append([target_row, target_col])
     events = [{"type": "mine_placed", "team": team}]
     game["log"].append({"type": "mine_placed", "team": team})
@@ -496,9 +557,13 @@ def captain_use_sonar(game, team, ask_row, ask_col, ask_sector):
     """
     if current_team(game) != team:
         return False, "Not your turn", []
+    if game["turn_state"]["system_used"]:
+        return False, "Already used a system this turn – move first", []
     sub = game["submarines"][team]
     if not _check_charge(sub, "sonar"):
         return False, "Sonar not charged", []
+    if is_system_blocked(sub["engineering"], "sonar"):
+        return False, "Sonar blocked by engineer breakdown (green nodes marked)", []
 
     enemy_team = "red" if team == "blue" else "blue"
     enemy_sub = game["submarines"][enemy_team]
@@ -513,6 +578,7 @@ def captain_use_sonar(game, team, ask_row, ask_col, ask_sector):
     sector_match = (actual_sector == ask_sector)
 
     _use_system(sub, "sonar")
+    game["turn_state"]["system_used"] = True
     events = [
         {"type": "sonar_used", "team": team, "ask_row": ask_row,
          "ask_col": ask_col, "ask_sector": ask_sector},
@@ -533,9 +599,13 @@ def captain_use_drone(game, team, ask_sector):
     """
     if current_team(game) != team:
         return False, "Not your turn", []
+    if game["turn_state"]["system_used"]:
+        return False, "Already used a system this turn – move first", []
     sub = game["submarines"][team]
     if not _check_charge(sub, "drone"):
         return False, "Drone not charged", []
+    if is_system_blocked(sub["engineering"], "drone"):
+        return False, "Drone blocked by engineer breakdown (green nodes marked)", []
 
     enemy_team = "red" if team == "blue" else "blue"
     enemy_sub = game["submarines"][enemy_team]
@@ -547,6 +617,7 @@ def captain_use_drone(game, team, ask_sector):
     in_sector = (actual_sector == ask_sector)
 
     _use_system(sub, "drone")
+    game["turn_state"]["system_used"] = True
     events = [
         {"type": "drone_used", "team": team, "ask_sector": ask_sector},
         {"type": "drone_result", "target": team, "in_sector": in_sector},
@@ -556,33 +627,39 @@ def captain_use_drone(game, team, ask_sector):
     return True, None, events
 
 
-def captain_use_stealth(game, team, moves):
+def captain_use_stealth(game, team, direction, steps):
     """
-    Use stealth (Silence): move 0-4 cells silently.
-    moves is a list of directions e.g. ["north", "north", "east"]
+    Use stealth (Silence): move 0-4 cells in a STRAIGHT LINE silently.
+    Rulebook: "moves his submarine up to four spaces in a straight line."
+    direction: one of 'north'/'south'/'east'/'west'
+    steps: integer 0-4 (how many spaces to move in that direction)
     Returns (ok, error_msg, events)
     """
     if current_team(game) != team:
         return False, "Not your turn", []
     if game["turn_state"]["moved"]:
         return False, "Already moved this turn", []
+    if game["turn_state"]["system_used"]:
+        return False, "Already used a system this turn – move first", []
     sub = game["submarines"][team]
     if not _check_charge(sub, "stealth"):
         return False, "Stealth not charged", []
-    if len(moves) > 4:
-        return False, "Stealth allows at most 4 moves", []
+    if is_system_blocked(sub["engineering"], "stealth"):
+        return False, "Stealth blocked by engineer breakdown (yellow nodes marked)", []
+    if direction not in ("north", "south", "east", "west"):
+        return False, f"Invalid direction: {direction}", []
+    if not isinstance(steps, int) or steps < 0 or steps > 4:
+        return False, "Stealth: steps must be 0–4", []
 
-    # Validate all moves up-front
+    # Validate straight-line path
     r, c = sub["position"]
     visited = set(tuple(pos) for pos in sub["trail"])
     path = []
-    for d in moves:
-        if d not in ("north", "south", "east", "west"):
-            return False, f"Invalid direction: {d}", []
-        dr, dc = direction_delta(d)
+    dr, dc = direction_delta(direction)
+    for _ in range(steps):
         r, c = r + dr, c + dc
         if not is_valid_position(game, r, c):
-            return False, f"Invalid move {d} during stealth", []
+            return False, "Invalid move during stealth (boundary or island)", []
         if (r, c) in visited:
             return False, "Cannot revisit a cell during stealth", []
         visited.add((r, c))
@@ -590,21 +667,22 @@ def captain_use_stealth(game, team, moves):
 
     # Apply moves
     _use_system(sub, "stealth")
+    game["turn_state"]["system_used"] = True
     for pos in path:
         sub["position"] = pos
         sub["trail"].append(pos)
 
     game["turn_state"]["moved"] = True
-    game["turn_state"]["direction"] = None  # stealth doesn't announce direction
-    game["turn_state"]["engineer_done"] = True  # no engineer action during stealth
+    game["turn_state"]["direction"] = None  # stealth doesn't reveal direction
+    game["turn_state"]["engineer_done"] = True   # no engineer action during stealth
     game["turn_state"]["first_mate_done"] = True  # no first mate action during stealth
 
     events = [
-        {"type": "stealth_used", "team": team, "steps": len(moves)},
+        {"type": "stealth_used", "team": team, "steps": steps, "direction": direction},
         {"type": "moved_private", "team": team,
          "row": sub["position"][0], "col": sub["position"][1]},
     ]
-    game["log"].append({"type": "stealth", "team": team, "steps": len(moves)})
+    game["log"].append({"type": "stealth", "team": team, "steps": steps})
     return True, None, events
 
 

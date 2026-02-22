@@ -542,15 +542,17 @@ def _bot_captain_action(game_id, g, game, team, cap_player) -> bool:
             return True
 
     elif atype == "stealth":
-        moves = action[1]
-        if moves:
-            ok, msg, events = gs.captain_use_stealth(game, team, moves)
+        # action = ("stealth", direction, steps)
+        direction = action[1] if len(action) > 1 else None
+        steps     = action[2] if len(action) > 2 else 0
+        if direction and steps > 0:
+            ok, msg, events = gs.captain_use_stealth(game, team, direction, steps)
             if ok:
                 _dispatch_events(game_id, game, events)
                 _broadcast_game_state(game_id)
                 socketio.emit("bot_chat", {
                     "team": team, "role": "captain", "name": name,
-                    "msg": f"👻 Stealth: {', '.join(moves)} ({len(moves)} moves)",
+                    "msg": f"👻 Stealth: {steps} steps {direction}",
                 }, room=game_id)
                 return True
         # Stealth failed or no moves — surface
@@ -1133,14 +1135,15 @@ def on_captain_drone(data):
 
 @socketio.on("captain_stealth")
 def on_captain_stealth(data):
-    game_id = (data.get("game_id") or "").upper()
-    name    = data.get("name", "")
-    moves   = data.get("moves", [])
+    game_id   = (data.get("game_id") or "").upper()
+    name      = data.get("name", "")
+    direction = data.get("direction", "")
+    steps     = int(data.get("steps", 0))
     p, game = _get_captain(game_id, name)
     if not p:
         return
 
-    ok, msg, events = gs.captain_use_stealth(game, p["team"], moves)
+    ok, msg, events = gs.captain_use_stealth(game, p["team"], direction, steps)
     if not ok:
         return emit("error", {"msg": msg})
 
