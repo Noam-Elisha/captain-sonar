@@ -1308,9 +1308,7 @@ def on_captain_mine_det(data):
         return emit("error", {"msg": msg})
 
     _dispatch_events(game_id, game, events)
-    _emit_to_team_role(game_id, p["team"], "captain", "mine_placed_ack",
-                       {"mines": game["submarines"][p["team"]]["mines"],
-                        "systems": game["submarines"][p["team"]]["systems"]})
+    # mine list is refreshed via game_state broadcast in _check_turn_auto_advance
     _check_turn_auto_advance(game_id, game)
 
 

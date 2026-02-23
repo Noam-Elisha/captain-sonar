@@ -493,11 +493,11 @@ function enterTargetMode(mode) {
   // Check charge status before entering target mode (saves time vs discovering error after targeting)
   if (mode === 'torpedo') {
     const t = mySystems.torpedo;
-    const ready = t && (t.ready || (t.charge || 0) >= (t.max || 3));
+    const ready = t && (t.ready || (t.charge || 0) >= (t.max || 6));
     if (!ready) { showToast('🚀 Torpedo not charged yet — ask your first mate!', true); return; }
   } else if (mode === 'mine') {
     const m = mySystems.mine;
-    const ready = m && (m.ready || (m.charge || 0) >= (m.max || 3));
+    const ready = m && (m.ready || (m.charge || 0) >= (m.max || 6));
     if (!ready) { showToast('💣 Mine not charged yet — ask your first mate!', true); return; }
   }
 

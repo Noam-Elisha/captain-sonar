@@ -389,11 +389,6 @@ def captain_surface(game, team):
     game["turn_state"]["engineer_done"] = True   # no engineering needed when surfacing
     game["turn_state"]["first_mate_done"] = True  # no charging when surfacing
 
-    # Check if surfacing killed the sub (e.g. surfacing at 1 HP)
-    result = _check_game_over(game)
-    if result:
-        events.append(result)
-
     return True, None, events
 
 

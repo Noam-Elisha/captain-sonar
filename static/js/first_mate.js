@@ -97,7 +97,7 @@ socket.on('damage', data => {
 });
 
 socket.on('surface_announced', data => {
-  // RULEBOOK: surfacing costs 1 HP (announced via damage event), enemy gets 3 bonus turns
+  // RULEBOOK (TBT): surfacing does NOT cost HP; enemy gets 3 bonus turns
   if (data.team === MY_TEAM) {
     logEvent(`You surfaced in sector ${data.sector} — trail + engineering cleared. Enemy gets 3 bonus turns!`, 'warning');
   } else {
