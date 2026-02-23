@@ -9,17 +9,18 @@ const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
 
 const SYS_DEF = {
   torpedo: {label:'🚀 Torpedo', max:3, color:'red',    desc:'Captain fires — range 4'},
-  mine:    {label:'💣 Mine',    max:3, color:'red',    desc:'Captain places adjacent (incl. diagonal)'},
+  mine:    {label:'💣 Mine',    max:3, color:'red',    desc:'Captain places N/S/E/W adjacent (after moving)'},
   sonar:   {label:'📡 Sonar',  max:3, color:'green',  desc:'YOU activate — ask row/col/sector'},
   drone:   {label:'🛸 Drone',  max:4, color:'green',  desc:'YOU activate — confirm sector'},
   stealth: {label:'👻 Stealth',max:5, color:'yellow', desc:'Captain moves silently 0–4 steps'},
 };
 
-let systems    = {torpedo:{charge:0}, mine:{charge:0}, sonar:{charge:0}, drone:{charge:0}, stealth:{charge:0}};
-let myHealth   = 4;
-let canCharge  = false;
-let isMyTurn   = false;
-let systemUsed = false;
+let systems       = {torpedo:{charge:0}, mine:{charge:0}, sonar:{charge:0}, drone:{charge:0}, stealth:{charge:0}};
+let myHealth      = 4;
+let canCharge     = false;
+let isMyTurn      = false;
+let systemUsed    = false;
+let movedThisTurn = false;  // RULEBOOK TBT: systems activate after course announcement
 
 const socket = io();
 
@@ -33,24 +34,27 @@ socket.on('game_state', state => {
   const mySub = state.submarines[MY_TEAM];
   if (mySub) { myHealth = mySub.health; systems = mySub.systems || systems; }
 
-  isMyTurn   = (state.current_team === MY_TEAM);
-  const ts   = state.turn_state || {};
+  isMyTurn      = (state.current_team === MY_TEAM);
+  const ts      = state.turn_state || {};
   const moved      = ts.moved || false;
   const fmDone     = ts.first_mate_done || false;
   const dir        = ts.direction;
   const stealthDir = ts.stealth_direction; // private — only own team's FM sees this
-  systemUsed   = ts.system_used || false;
+  systemUsed    = ts.system_used || false;
+  movedThisTurn = moved;
   // canCharge on normal move OR stealth move (but NOT after surfacing)
-  canCharge    = isMyTurn && moved && !fmDone && !!(dir || stealthDir);
+  canCharge     = isMyTurn && moved && !fmDone && !!(dir || stealthDir);
 
   renderAll();
 });
 
 socket.on('systems_update', data => {
-  systems   = data.systems;
-  canCharge = false;
+  systems = data.systems;
   renderSystems();
-  logEvent('System charged!', 'highlight');
+  // Only log a charge message when a charge actually happened (not on system consumption)
+  if (data.reason === 'charge' && data.system) {
+    logEvent(`⚡ ${SYS_DEF[data.system]?.label || data.system} charged +1`, 'highlight');
+  }
 });
 
 socket.on('can_charge', data => {
@@ -64,9 +68,10 @@ socket.on('can_charge', data => {
 });
 
 socket.on('turn_start', data => {
-  canCharge  = false;
-  systemUsed = false;
-  isMyTurn   = (data.team === MY_TEAM);
+  canCharge     = false;
+  systemUsed    = false;
+  movedThisTurn = false;
+  isMyTurn      = (data.team === MY_TEAM);
   renderSystems();
   if (data.team !== MY_TEAM) {
     document.getElementById('charge-overlay').classList.remove('hidden');
@@ -181,7 +186,8 @@ function renderSystems() {
     const max   = s.max    || meta.max;
     const ready = s.ready  || (cur >= max);
     const isGreen     = (sys === 'sonar' || sys === 'drone');
-    const canActivate = isGreen && ready && isMyTurn && !systemUsed;
+    // RULEBOOK TBT: FM can only activate systems AFTER the captain has announced a course
+    const canActivate = isGreen && ready && isMyTurn && !systemUsed && movedThisTurn;
 
     const card     = document.createElement('div');
     card.className = `sys-card sys-${sys}${canCharge && !ready ? ' can-charge' : ''}${ready ? ' is-ready' : ''}${canActivate ? ' can-activate' : ''}`;

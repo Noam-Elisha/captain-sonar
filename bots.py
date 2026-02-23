@@ -182,33 +182,9 @@ class CaptainBot:
         if sub.get("surfaced"):
             return None
 
-        # ── Pre-move weapon checks ─────────────────────────────────────────────
-
-        # Fire torpedo if charged and we have a sector target
-        torpedo_charge = systems.get("torpedo", 0)
-        if isinstance(torpedo_charge, dict):
-            torpedo_charge = torpedo_charge.get("charge", 0)
-        if torpedo_charge >= SYSTEM_MAX_CHARGE["torpedo"] and self.known_enemy_sector:
-            target = self._best_torpedo_target(r, c, self.known_enemy_sector, map_def, island_set)
-            if target:
-                return ("torpedo", target[0], target[1])
-
-        # Use drone if charged and sector unknown
-        drone_charge = systems.get("drone", 0)
-        if isinstance(drone_charge, dict):
-            drone_charge = drone_charge.get("charge", 0)
-        if drone_charge >= SYSTEM_MAX_CHARGE["drone"] and self.known_enemy_sector is None:
-            sector = random.randint(1, 9)
-            return ("drone", sector)
-
-        # Use sonar if charged (interactive flow: no params needed at activation)
-        sonar_charge = systems.get("sonar", 0)
-        if isinstance(sonar_charge, dict):
-            sonar_charge = sonar_charge.get("charge", 0)
-        if sonar_charge >= SYSTEM_MAX_CHARGE["sonar"]:
-            return ("sonar",)
-
         # ── Movement ───────────────────────────────────────────────────────────
+        # NOTE: Weapon systems (torpedo/drone/sonar) are decided AFTER moving;
+        # call decide_weapon_action() post-move (after eng+FM have acted).
 
         valid = _get_valid_moves(r, c, trail_set, island_set, rows, cols, mine_set)
 
@@ -244,6 +220,44 @@ class CaptainBot:
             ),
         )
         return ("move", best[0])
+
+    # ── Post-move weapon decision ──────────────────────────────────────────────
+
+    def decide_weapon_action(self, sub: dict, map_def: dict) -> Optional[tuple]:
+        """
+        Decide whether to use a weapon system AFTER the captain has moved
+        and engineer+FM have acted.
+
+        RULEBOOK TBT: systems activate after each course announcement.
+        Returns ("torpedo", row, col), ("drone", sector), ("sonar",), or None.
+        """
+        pos = sub.get("position")
+        if pos is None:
+            return None
+        r, c = pos
+        systems = sub.get("systems", {})
+        island_set = set(tuple(p) for p in map_def.get("islands", []))
+
+        def charge(s):
+            v = systems.get(s, 0)
+            return v.get("charge", 0) if isinstance(v, dict) else v
+
+        # Fire torpedo if charged and we have a sector target
+        if charge("torpedo") >= SYSTEM_MAX_CHARGE["torpedo"] and self.known_enemy_sector:
+            target = self._best_torpedo_target(r, c, self.known_enemy_sector, map_def, island_set)
+            if target:
+                return ("torpedo", target[0], target[1])
+
+        # Use drone if charged and sector unknown
+        if charge("drone") >= SYSTEM_MAX_CHARGE["drone"] and self.known_enemy_sector is None:
+            sector = random.randint(1, 9)
+            return ("drone", sector)
+
+        # Use sonar if charged (interactive flow: enemy captain responds)
+        if charge("sonar") >= SYSTEM_MAX_CHARGE["sonar"]:
+            return ("sonar",)
+
+        return None
 
     # ── Weapon helpers ─────────────────────────────────────────────────────────
 

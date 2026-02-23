@@ -180,10 +180,14 @@ def _dispatch_events(game_id, game, events):
                           room=game_id)
 
         elif t == "system_charged":
-            _emit_to_team_role(game_id, ev["team"], "first_mate", "systems_update",
-                                {"systems": game["submarines"][ev["team"]]["systems"]})
-            _emit_to_team_role(game_id, ev["team"], "captain", "systems_update",
-                                {"systems": game["submarines"][ev["team"]]["systems"]})
+            # Include reason="charge" so first_mate.js can distinguish charging from consumption
+            update_data = {
+                "systems": game["submarines"][ev["team"]]["systems"],
+                "reason":  "charge",
+                "system":  ev.get("system"),
+            }
+            _emit_to_team_role(game_id, ev["team"], "first_mate", "systems_update", update_data)
+            _emit_to_team_role(game_id, ev["team"], "captain",     "systems_update", update_data)
 
         elif t == "mine_placed":
             _emit_to_team_role(game_id, ev["team"], "captain", "mine_placed_ack",
@@ -524,6 +528,16 @@ def _bot_playing_step(game_id: str, g: dict, game: dict) -> bool:
         if fm is not None:
             return _bot_fm_action(game_id, g, game, team, fm)
 
+    # Step 3.5 — Captain may use a weapon system AFTER announcing a course
+    # RULEBOOK TBT: "Captain or First Mate can activate a system after each course announcement"
+    ok_end, _ = gs.can_end_turn(game, team)
+    if ok_end and not ts.get("system_used"):
+        cap = _get_bot_for_role(game_id, team, "captain")
+        if cap is not None:
+            acted = _bot_captain_weapon_action(game_id, g, game, team, cap)
+            if acted:
+                return True
+
     # Step 4 — End turn if possible and captain is a bot
     ok, _ = gs.can_end_turn(game, team)
     if ok:
@@ -571,47 +585,6 @@ def _bot_captain_action(game_id, g, game, team, cap_player) -> bool:
             _do_surface_and_dive(game_id, game, team, name, events)
             return True
 
-    elif atype == "torpedo":
-        tr, tc = action[1], action[2]
-        ok, msg, events = gs.captain_fire_torpedo(game, team, tr, tc)
-        if ok:
-            _dispatch_events(game_id, game, events)
-            _emit_to_team_role(game_id, team, "captain", "systems_update",
-                               {"systems": game["submarines"][team]["systems"]})
-            _emit_to_team_role(game_id, team, "first_mate", "systems_update",
-                               {"systems": game["submarines"][team]["systems"]})
-            _broadcast_game_state(game_id)
-            socketio.emit("bot_chat", {
-                "team": team, "role": "captain", "name": name,
-                "msg": f"🚀 Firing torpedo at ({tr+1},{tc+1})!",
-            }, room=game_id)
-            return True
-
-    elif atype == "drone":
-        sector = action[1]
-        ok, msg, events = gs.captain_use_drone(game, team, sector)
-        if ok:
-            _dispatch_events(game_id, game, events)
-            in_sec = any(ev.get("in_sector") for ev in events
-                         if ev.get("type") == "drone_result")
-            _broadcast_game_state(game_id)
-            socketio.emit("bot_chat", {
-                "team": team, "role": "captain", "name": name,
-                "msg": f"🛸 Drone sector {sector}: {'CONTACT!' if in_sec else 'clear'}",
-            }, room=game_id)
-            return True
-
-    elif atype == "sonar":
-        ok, msg, events = gs.captain_use_sonar(game, team)
-        if ok:
-            _dispatch_events(game_id, game, events)
-            _broadcast_game_state(game_id)
-            socketio.emit("bot_chat", {
-                "team": team, "role": "captain", "name": name,
-                "msg": "📡 Sonar activated — awaiting enemy response",
-            }, room=game_id)
-            return True
-
     elif atype == "stealth":
         # action = ("stealth", direction, steps)
         direction = action[1] if len(action) > 1 else None
@@ -648,6 +621,58 @@ def _do_surface(game_id, game, team, bot_name, surface_events):
 
 # Keep alias for any remaining references
 _do_surface_and_dive = _do_surface
+
+
+def _bot_captain_weapon_action(game_id, g, game, team, cap_player) -> bool:
+    """Captain bot optionally uses a weapon system AFTER moving (post eng+FM step).
+    RULEBOOK TBT: systems activate after each course announcement."""
+    bot = cap_player["bot"]
+    sub = game["submarines"][team]
+    name = cap_player["name"]
+
+    action = bot.decide_weapon_action(sub, game["map"])
+    if action is None:
+        return False
+
+    atype = action[0]
+
+    if atype == "torpedo":
+        tr, tc = action[1], action[2]
+        ok, msg, events = gs.captain_fire_torpedo(game, team, tr, tc)
+        if ok:
+            _dispatch_events(game_id, game, events)
+            _broadcast_game_state(game_id)
+            socketio.emit("bot_chat", {
+                "team": team, "role": "captain", "name": name,
+                "msg": f"🚀 Firing torpedo at ({tr+1},{tc+1})!",
+            }, room=game_id)
+            return True
+
+    elif atype == "drone":
+        sector = action[1]
+        ok, msg, events = gs.captain_use_drone(game, team, sector)
+        if ok:
+            _dispatch_events(game_id, game, events)
+            in_sec = any(ev.get("in_sector") for ev in events if ev.get("type") == "drone_result")
+            _broadcast_game_state(game_id)
+            socketio.emit("bot_chat", {
+                "team": team, "role": "captain", "name": name,
+                "msg": f"🛸 Drone sector {sector}: {'CONTACT!' if in_sec else 'clear'}",
+            }, room=game_id)
+            return True
+
+    elif atype == "sonar":
+        ok, msg, events = gs.captain_use_sonar(game, team)
+        if ok:
+            _dispatch_events(game_id, game, events)
+            _broadcast_game_state(game_id)
+            socketio.emit("bot_chat", {
+                "team": team, "role": "captain", "name": name,
+                "msg": "📡 Sonar activated — awaiting enemy response",
+            }, room=game_id)
+            return True
+
+    return False
 
 
 def _bot_engineer_action(game_id, g, game, team, eng_player) -> bool:
@@ -1443,8 +1468,8 @@ def on_first_mate_charge(data):
     if not ok:
         return emit("error", {"msg": msg})
 
+    # _dispatch_events handles systems_update (with reason="charge") via system_charged event
     _dispatch_events(game_id, g["game"], events)
-    emit("systems_update", {"systems": g["game"]["submarines"][p["team"]]["systems"]})
     _check_turn_auto_advance(game_id, g["game"])
 
 

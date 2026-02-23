@@ -472,14 +472,14 @@ function enterTargetMode(mode) {
         const dist = myPosition ? Math.abs(r - myPosition.row) + Math.abs(c - myPosition.col) : 999;
         if (dist <= 4 && dist > 0) cell.classList.add('torpedo-target');
       } else if (mode === 'mine') {
-        // Chebyshev distance 1 = all 8 adjacent cells (includes diagonals)
+        // RULEBOOK: "adjacent" = Manhattan distance 1 (N/S/E/W only, no diagonals)
         const dr = myPosition ? Math.abs(r - myPosition.row) : 999;
         const dc = myPosition ? Math.abs(c - myPosition.col) : 999;
-        if (Math.max(dr, dc) === 1) cell.classList.add('mine-target');
+        if (dr + dc === 1) cell.classList.add('mine-target');
       }
     }
   }
-  showToast(mode === 'torpedo' ? 'Click a target (range 4)' : 'Click cell to place mine (diagonals OK)');
+  showToast(mode === 'torpedo' ? 'Click a target (range 1–4)' : 'Click cell to place mine (N/S/E/W only)');
 }
 
 function clearTargetMode() {

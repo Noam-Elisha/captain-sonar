@@ -509,11 +509,14 @@ def has_valid_move(game, team):
 def captain_fire_torpedo(game, team, target_row, target_col):
     """Fire a torpedo. Returns (ok, error_msg, events).
     If system unavailable: takes 1 damage instead of firing.
-    RULEBOOK: torpedo destroys (without exploding) any mine at the impact cell."""
+    RULEBOOK: torpedo destroys (without exploding) any mine at the impact cell.
+    RULEBOOK TBT: systems activate AFTER the captain announces a course (moved=True)."""
     if current_team(game) != team:
         return False, "Not your turn", []
     if game["phase"] != "playing":
         return False, "Game not active", []
+    if not game["turn_state"]["moved"]:
+        return False, "Must announce a course before firing torpedo", []
     if game["turn_state"]["system_used"]:
         return False, "Already used a system this turn", []
     if not is_valid_position(game, target_row, target_col):
@@ -554,9 +557,13 @@ def captain_fire_torpedo(game, team, target_row, target_col):
 
 
 def captain_place_mine(game, team, target_row, target_col):
-    """Place a mine on an adjacent cell (incl. diagonal). Returns (ok, error_msg, events)."""
+    """Place a mine on a cardinally adjacent cell. Returns (ok, error_msg, events).
+    RULEBOOK: 'adjacent' means N/S/E/W only (Manhattan distance 1).
+    RULEBOOK TBT: systems activate AFTER the captain announces a course (moved=True)."""
     if current_team(game) != team:
         return False, "Not your turn", []
+    if not game["turn_state"]["moved"]:
+        return False, "Must announce a course before placing a mine", []
     if game["turn_state"]["system_used"]:
         return False, "Already used a system this turn", []
     if not is_valid_position(game, target_row, target_col):
@@ -564,10 +571,9 @@ def captain_place_mine(game, team, target_row, target_col):
 
     sub = game["submarines"][team]
     r, c = sub["position"]
-    row_dist = abs(target_row - r)
-    col_dist = abs(target_col - c)
-    if max(row_dist, col_dist) != 1:   # Chebyshev distance (8 adjacent cells incl. diagonal)
-        return False, "Mine must be placed on an adjacent cell (including diagonal)", []
+    manhattan_dist = abs(target_row - r) + abs(target_col - c)
+    if manhattan_dist != 1:   # RULEBOOK: cardinal adjacency only (N/S/E/W)
+        return False, "Mine must be placed in a cardinally adjacent cell (N/S/E/W only)", []
 
     # Can't place on route (trail lines) – rulebook explicit
     if [target_row, target_col] in sub["trail"]:
@@ -644,10 +650,13 @@ def captain_use_sonar(game, team):
     Activate sonar. Sets waiting_for='sonar_response' so enemy captain must respond.
     RULEBOOK: enemy captain gives 2 pieces of info (1 true, 1 false, different types).
     The activating team sees the enemy's stated info (NOT server-computed truth).
+    RULEBOOK TBT: systems activate AFTER the captain announces a course (moved=True).
     Returns (ok, error_msg, events)
     """
     if current_team(game) != team:
         return False, "Not your turn", []
+    if not game["turn_state"]["moved"]:
+        return False, "Must announce a course before activating sonar", []
     if game["turn_state"]["system_used"]:
         return False, "Already used a system this turn", []
     sub = game["submarines"][team]
@@ -724,12 +733,15 @@ def captain_respond_sonar(game, responding_team, type1, val1, type2, val2):
 def captain_use_drone(game, team, ask_sector):
     """
     Use drone: ask if enemy is in a sector.
+    RULEBOOK TBT: systems activate AFTER the captain announces a course (moved=True).
     Returns (ok, error_msg, events)
     """
     if current_team(game) != team:
         return False, "Not your turn", []
+    if not game["turn_state"]["moved"]:
+        return False, "Must announce a course before launching drone", []
     if game["turn_state"]["system_used"]:
-        return False, "Already used a system this turn – move first", []
+        return False, "Already used a system this turn", []
     sub = game["submarines"][team]
     if not _check_charge(sub, "drone"):
         return False, "Drone not charged", []
@@ -851,7 +863,14 @@ def can_end_turn(game, team):
         if not ts["engineer_done"]:
             return False, "Waiting for engineer to mark a node"
         if not ts["first_mate_done"]:
-            return False, "Waiting for first mate to charge a system"
+            # Exception: if ALL systems are fully charged, FM has nothing to charge.
+            # The rulebook only requires FM to mark a space when one is available.
+            sub = game["submarines"][team]
+            all_full = all(
+                sub["systems"][s] >= SYSTEM_MAX_CHARGE[s] for s in SYSTEM_MAX_CHARGE
+            )
+            if not all_full:
+                return False, "Waiting for first mate to charge a system"
     return True, None
 
 
