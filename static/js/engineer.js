@@ -79,12 +79,15 @@ socket.on('game_state', state => {
   }
   if (enemySub) enemyHealth = enemySub.health;
 
-  const isMyTurn = (state.current_team === MY_TEAM);
-  const moved    = state.turn_state?.moved;
-  const engDone  = state.turn_state?.engineer_done;
-  const dir      = state.turn_state?.direction;
+  const isMyTurn   = (state.current_team === MY_TEAM);
+  const moved      = state.turn_state?.moved;
+  const engDone    = state.turn_state?.engineer_done;
+  const dir        = state.turn_state?.direction;
+  const stealthDir = state.turn_state?.stealth_direction; // private — only own team sees this
 
-  activeDir = (isMyTurn && moved && !engDone && dir) ? dir : null;
+  // Use public direction if available; fall back to private stealth direction
+  const effectiveDir = dir || stealthDir || null;
+  activeDir = (isMyTurn && moved && !engDone && effectiveDir) ? effectiveDir : null;
   canMark   = !!activeDir;
 
   renderAll();
@@ -96,7 +99,10 @@ socket.on('direction_to_mark', data => {
   canMark   = true;
   updateStatus();
   renderBoard();
-  logEvent(`⚡ Mark a node in the ${data.direction.toUpperCase()} column!`, 'highlight');
+  const label = data.is_stealth
+    ? `👻 STEALTH move — mark a node in the ${data.direction.toUpperCase()} column (secret!)`
+    : `⚡ Mark a node in the ${data.direction.toUpperCase()} column!`;
+  logEvent(label, 'highlight');
 });
 
 socket.on('board_update', data => {

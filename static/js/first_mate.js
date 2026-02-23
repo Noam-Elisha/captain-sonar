@@ -35,11 +35,13 @@ socket.on('game_state', state => {
 
   isMyTurn   = (state.current_team === MY_TEAM);
   const ts   = state.turn_state || {};
-  const moved  = ts.moved || false;
-  const fmDone = ts.first_mate_done || false;
-  const dir    = ts.direction;
+  const moved      = ts.moved || false;
+  const fmDone     = ts.first_mate_done || false;
+  const dir        = ts.direction;
+  const stealthDir = ts.stealth_direction; // private — only own team's FM sees this
   systemUsed   = ts.system_used || false;
-  canCharge    = isMyTurn && moved && !fmDone && !!dir;
+  // canCharge on normal move OR stealth move (but NOT after surfacing)
+  canCharge    = isMyTurn && moved && !fmDone && !!(dir || stealthDir);
 
   renderAll();
 });
@@ -51,10 +53,13 @@ socket.on('systems_update', data => {
   logEvent('System charged!', 'highlight');
 });
 
-socket.on('can_charge', () => {
+socket.on('can_charge', data => {
   canCharge = true;
   renderSystems();
-  logEvent('Captain moved — charge a system now!', 'highlight');
+  const msg = (data && data.is_stealth)
+    ? '👻 Stealth move — charge a system now!'
+    : 'Captain moved — charge a system now!';
+  logEvent(msg, 'highlight');
   document.getElementById('charge-overlay').classList.add('hidden');
 });
 

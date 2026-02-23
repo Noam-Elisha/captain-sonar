@@ -252,6 +252,12 @@ def _dispatch_events(game_id, game, events):
                                  "trail": game["submarines"][ev["team"]]["trail"]})
             _emit_to_team_role(game_id, ev["team"], "first_mate", "systems_update",
                                 {"systems": game["submarines"][ev["team"]]["systems"]})
+            # RULEBOOK stealth: engineer still marks 1 node (in stealth direction, privately)
+            # and FM still charges 1 system — notify both via private events
+            _emit_to_team_role(game_id, ev["team"], "engineer", "direction_to_mark",
+                                {"direction": ev["direction"], "is_stealth": True})
+            _emit_to_team_role(game_id, ev["team"], "first_mate", "can_charge",
+                                {"is_stealth": True})
 
         elif t == "turn_end":
             pass
@@ -505,14 +511,15 @@ def _bot_playing_step(game_id: str, g: dict, game: dict) -> bool:
             return False   # human captain — wait
         return _bot_captain_action(game_id, g, game, team, cap)
 
-    # Step 2 — Engineer marks (only if direction is set)
-    if not ts["engineer_done"] and ts["direction"] is not None:
+    # Step 2 — Engineer marks (on normal move OR stealth move)
+    has_dir = ts["direction"] is not None or ts.get("stealth_direction") is not None
+    if not ts["engineer_done"] and has_dir:
         eng = _get_bot_for_role(game_id, team, "engineer")
         if eng is not None:
             return _bot_engineer_action(game_id, g, game, team, eng)
 
-    # Step 3 — First mate charges (only if direction is set)
-    if not ts["first_mate_done"] and ts["direction"] is not None:
+    # Step 3 — First mate charges (on normal move OR stealth move)
+    if not ts["first_mate_done"] and has_dir:
         fm = _get_bot_for_role(game_id, team, "first_mate")
         if fm is not None:
             return _bot_fm_action(game_id, g, game, team, fm)
@@ -646,7 +653,9 @@ _do_surface_and_dive = _do_surface
 def _bot_engineer_action(game_id, g, game, team, eng_player) -> bool:
     """Engineer bot marks a node."""
     bot: EngineerBot = eng_player["bot"]
-    direction = game["turn_state"]["direction"]
+    ts = game["turn_state"]
+    # Use public direction or private stealth direction
+    direction = ts["direction"] if ts["direction"] is not None else ts.get("stealth_direction")
     board = game["submarines"][team]["engineering"]
 
     index = bot.decide_mark(board, direction)

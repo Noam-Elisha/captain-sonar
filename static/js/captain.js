@@ -30,9 +30,10 @@ let mySector       = null;  // current sector (for sonar respond hint)
 let surfaceBonusForTeam  = null;  // which team has bonus turns
 let surfaceBonusTurns    = 0;     // turns remaining for bonus team
 
-let targetMode       = null;   // 'torpedo' | 'mine' | null
-let stealthDirection = null;
-let stealthSteps     = 1;
+let targetMode         = null;   // 'torpedo' | 'mine' | null
+let stealthDirection   = null;
+let stealthSteps       = 1;
+let hasStealthDir      = false;  // true when stealth was used (need eng+FM to act still)
 
 const ISLAND_SET = new Set(ISLANDS.map(([r,c]) => `${r},${c}`));
 
@@ -74,6 +75,7 @@ socket.on('turn_start', data => {
   engineerDone  = false;
   firstMateDone = false;
   lastDirection = null;
+  hasStealthDir = false;
   updateLock();
   updateEndTurnBtn();
   if (isMyTurn) {
@@ -222,6 +224,8 @@ function updateFromState(state) {
   engineerDone  = ts.engineer_done  || false;
   firstMateDone = ts.first_mate_done || false;
   lastDirection = ts.direction      || null;
+  // stealth_direction is non-null when stealth was used — still need eng+FM to act
+  hasStealthDir = !!(ts.stealth_direction);
 
   // Surface bonus tracking
   const sb = state.surface_bonus;
@@ -447,11 +451,12 @@ function showDiveBtn(show) {
 
 function doEndTurn() {
   if (!isMyTurn || !hasMoved) return;
-  const needWait = (lastDirection !== null);
+  // Must wait for eng+FM on a regular move OR a stealth move
+  const needWait = (lastDirection !== null) || hasStealthDir;
   if (needWait && (!engineerDone || !firstMateDone)) return;
   socket.emit('captain_end_turn', {game_id: GAME_ID, name: MY_NAME});
   isMyTurn = false; hasMoved = false; engineerDone = false;
-  firstMateDone = false; lastDirection = null;
+  firstMateDone = false; lastDirection = null; hasStealthDir = false;
   updateLock(); updateEndTurnBtn();
 }
 
@@ -561,7 +566,8 @@ function updateLock() {
 
 function updateEndTurnBtn() {
   const btn      = document.getElementById('btn-end-turn');
-  const needWait = (lastDirection !== null);
+  // Must wait on normal move OR stealth move (both require eng + FM to act)
+  const needWait = (lastDirection !== null) || hasStealthDir;
   const canEnd   = isMyTurn && hasMoved && (!needWait || engineerDone) && (!needWait || firstMateDone);
   btn.disabled   = !canEnd;
   updateRoleWaitStatus();
@@ -570,7 +576,8 @@ function updateEndTurnBtn() {
 function updateRoleWaitStatus() {
   const el = document.getElementById('role-wait-status');
   if (!el) return;
-  if (!isMyTurn || !hasMoved || lastDirection === null) { el.innerHTML = ''; return; }
+  const needWait = (lastDirection !== null) || hasStealthDir;
+  if (!isMyTurn || !hasMoved || !needWait) { el.innerHTML = ''; return; }
   const engIcon = engineerDone  ? '✅' : '⏳';
   const fmIcon  = firstMateDone ? '✅' : '⏳';
   el.innerHTML = `<span class="wait-label">${engIcon} Engineer</span><span class="wait-label">${fmIcon} First Mate</span>`;

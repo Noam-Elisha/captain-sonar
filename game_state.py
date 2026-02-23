@@ -246,14 +246,15 @@ def make_game(map_key="alpha"):
 
 def make_turn_state():
     return {
-        "moved":           False,   # captain has moved/surfaced this turn
-        "direction":       None,    # direction chosen this turn
-        "engineer_done":   False,
-        "first_mate_done": False,
-        "waiting_for":     None,    # None | "sonar_response" | "drone_response"
-        "sonar_query":     None,    # {row, col, sector} asked values
-        "drone_query":     None,    # {sector} asked value
-        "system_used":     False,   # a system was already activated this turn
+        "moved":             False,   # captain has moved/surfaced this turn
+        "direction":         None,    # direction chosen this turn (None for stealth/surface)
+        "stealth_direction": None,    # private stealth direction (only revealed to own team)
+        "engineer_done":     False,
+        "first_mate_done":   False,
+        "waiting_for":       None,    # None | "sonar_response" | "drone_response"
+        "sonar_query":       None,    # {row, col, sector} asked values
+        "drone_query":       None,    # {sector} asked value
+        "system_used":       False,   # a system was already activated this turn
     }
 
 
@@ -403,17 +404,21 @@ def captain_dive(game, team):
 # ── Engineer ──────────────────────────────────────────────────────────────────
 
 def engineer_mark(game, team, direction, index):
-    """Mark an engineering node. Returns (ok, error_msg, events, damage)."""
+    """Mark an engineering node. Returns (ok, error_msg, events, damage).
+    RULEBOOK stealth: engineer must mark one node in the stealth direction (private)."""
     if current_team(game) != team:
         return False, "Not your turn", [], 0
     if not game["turn_state"]["moved"]:
         return False, "Captain hasn't moved yet", [], 0
-    if game["turn_state"]["direction"] is None:
+    ts = game["turn_state"]
+    # Determine required direction (public move direction, or private stealth direction)
+    effective_dir = ts["direction"] if ts["direction"] is not None else ts.get("stealth_direction")
+    if effective_dir is None:
         return False, "No direction to mark (submarine surfaced)", [], 0
-    if game["turn_state"]["engineer_done"]:
+    if ts["engineer_done"]:
         return False, "Already marked this turn", [], 0
-    if direction != game["turn_state"]["direction"]:
-        return False, f"Must mark in the {game['turn_state']['direction']} section", [], 0
+    if direction != effective_dir:
+        return False, f"Must mark in the {effective_dir} section", [], 0
 
     board = game["submarines"][team]["engineering"]
     if board[direction][index]["marked"]:
@@ -447,14 +452,18 @@ def engineer_mark(game, team, direction, index):
 # ── First Mate ────────────────────────────────────────────────────────────────
 
 def first_mate_charge(game, team, system):
-    """Charge a system. Returns (ok, error_msg, events)."""
+    """Charge a system. Returns (ok, error_msg, events).
+    RULEBOOK stealth: FM still charges one system on a stealth move."""
     if current_team(game) != team:
         return False, "Not your turn", []
     if not game["turn_state"]["moved"]:
         return False, "Captain hasn't moved yet", []
-    if game["turn_state"]["direction"] is None:
+    ts = game["turn_state"]
+    # Allow charging on normal moves AND stealth moves (not on surface)
+    effective_dir = ts["direction"] if ts["direction"] is not None else ts.get("stealth_direction")
+    if effective_dir is None:
         return False, "No charging when surfacing", []
-    if game["turn_state"]["first_mate_done"]:
+    if ts["first_mate_done"]:
         return False, "Already charged this turn", []
     if system not in SYSTEM_MAX_CHARGE:
         return False, f"Unknown system: {system}", []
@@ -585,12 +594,15 @@ def captain_place_mine(game, team, target_row, target_col):
 
 def captain_detonate_mine(game, team, mine_index):
     """Detonate one of the team's own mines. Returns (ok, error_msg, events).
-    RULEBOOK: can only detonate on own turn."""
+    RULEBOOK: can only detonate on own turn; cannot detonate while surfaced."""
     if game["phase"] != "playing":
         return False, "Game not active", []
     if current_team(game) != team:
         return False, "Not your turn", []
     sub = game["submarines"][team]
+    # RULEBOOK: "At any time, except while surfaced, the Captain can trigger a mine"
+    if sub["surfaced"]:
+        return False, "Cannot trigger a mine while surfaced", []
     if mine_index < 0 or mine_index >= len(sub["mines"]):
         return False, "Invalid mine index", []
 
@@ -806,9 +818,11 @@ def captain_use_stealth(game, team, direction, steps):
         sub["trail"].append(pos)
 
     game["turn_state"]["moved"] = True
-    game["turn_state"]["direction"] = None  # stealth doesn't reveal direction
-    game["turn_state"]["engineer_done"] = True   # no engineer action during stealth
-    game["turn_state"]["first_mate_done"] = True  # no first mate action during stealth
+    game["turn_state"]["direction"] = None           # public direction stays hidden
+    game["turn_state"]["stealth_direction"] = direction  # private — only own team knows
+    # RULEBOOK: engineer still marks 1 node in the stealth direction,
+    # and FM still charges 1 system on a stealth move.
+    # Do NOT set engineer_done or first_mate_done — they must still act.
 
     events = [
         {"type": "stealth_used", "team": team, "steps": steps, "direction": direction},
@@ -830,9 +844,10 @@ def can_end_turn(game, team):
         return False, "Must move or surface before ending turn"
     if ts["waiting_for"]:
         return False, "Waiting for a response"
-    # When a directional move was made, engineer AND first mate must act first.
-    # (Surface and stealth auto-set both flags, so this only blocks normal moves.)
-    if ts["direction"] is not None:
+    # When a directional move OR stealth was used, engineer AND first mate must act first.
+    # (Surface auto-sets both done flags so the check below is always satisfied there.)
+    has_direction = ts["direction"] is not None or ts.get("stealth_direction") is not None
+    if has_direction:
         if not ts["engineer_done"]:
             return False, "Waiting for engineer to mark a node"
         if not ts["first_mate_done"]:
@@ -928,6 +943,13 @@ def serialize_game(game, perspective_team=None):
             s["engineering"] = None
         subs[team] = s
 
+    # Build turn_state, hiding stealth_direction from the enemy team
+    ts = game["turn_state"]
+    if perspective_team is not None and perspective_team != current_team(game) and game["phase"] == "playing":
+        # Enemy team should not see the stealth direction
+        ts = dict(ts)
+        ts["stealth_direction"] = None
+
     return {
         "phase":         game["phase"],
         "turn_index":    game["turn_index"],
@@ -935,7 +957,7 @@ def serialize_game(game, perspective_team=None):
         "active_team":   game.get("active_team"),
         "surface_bonus": game.get("surface_bonus"),
         "turn_order":    game["turn_order"],
-        "turn_state":    game["turn_state"],
+        "turn_state":    ts,
         "submarines":    subs,
         "winner":        game["winner"],
         "map": {
