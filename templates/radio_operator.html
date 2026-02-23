@@ -16,6 +16,7 @@
     <div class="ro-toolbar">
       <button class="tool-btn active" id="tool-draw"  onclick="setTool('draw')">✏ Draw</button>
       <button class="tool-btn"        id="tool-erase" onclick="setTool('erase')">⌫ Erase</button>
+      <button class="tool-btn"        id="tool-pan"   onclick="setTool('pan')">✋ Pan</button>
       <button class="tool-btn"        id="tool-clear" onclick="clearAll()">✕ Clear</button>
       <span class="ro-hint" id="ro-hint">Listening for enemy movements…</span>
     </div>
@@ -32,15 +33,9 @@
       <span class="team-badge">{{ team | upper }} TEAM</span>
     </div>
 
-    <div class="panel-section two-col">
-      <div>
-        <div class="section-label">OWN HEALTH</div>
-        <div class="health-row" id="own-health"></div>
-      </div>
-      <div>
-        <div class="section-label">ENEMY HEALTH</div>
-        <div class="health-row" id="enemy-health"></div>
-      </div>
+    <div class="panel-section">
+      <div class="section-label">OWN HEALTH</div>
+      <div class="health-row fixed-health" id="own-health"></div>
     </div>
 
     <div class="panel-section">
@@ -53,7 +48,7 @@
       <textarea class="notes-area" placeholder="Write deductions here…"></textarea>
     </div>
 
-    <div class="panel-section">
+    <div class="panel-section flex-grow">
       <div class="section-label">EVENT LOG</div>
       <div class="event-log" id="event-log"></div>
     </div>

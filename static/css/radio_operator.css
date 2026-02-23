@@ -22,7 +22,12 @@
 .draw-canvas {
   position: absolute; left: 1rem; top: 1rem;
   pointer-events: auto; z-index: 20; cursor: crosshair;
+  /* transform is applied via JS for pan mode */
+  transition: none;
 }
+
+/* Fixed-height health row */
+.fixed-health { min-height: 28px; }
 
 /* Map cell (read-only for RO) */
 .map-cell {
@@ -34,7 +39,7 @@
 
 /* Movement log */
 .movement-log {
-  max-height: 200px; overflow-y: auto;
+  max-height: 160px; overflow-y: auto;
   background: var(--bg-deep); border-radius: 6px; padding: .4rem .6rem;
   font-size: .82rem;
 }

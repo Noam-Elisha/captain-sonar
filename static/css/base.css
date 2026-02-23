@@ -52,7 +52,7 @@ h1, h2, h3 { line-height: 1.2; }
 .map-panel  { flex: 1; overflow: auto; position: relative;
   display: flex; align-items: center; justify-content: center; }
 .ctrl-panel {
-  width: 280px; min-width: 240px; max-width: 340px;
+  width: 330px; min-width: 270px; max-width: 420px;
   background: var(--bg-panel);
   border-left: 1px solid var(--border);
   display: flex; flex-direction: column;
@@ -78,18 +78,28 @@ h1, h2, h3 { line-height: 1.2; }
 
 /* ── Panel sections ── */
 .panel-section {
-  padding: .75rem 1rem;
+  padding: .55rem .85rem;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+/* Grows to fill leftover vertical space; used for event-log section */
+.panel-section.flex-grow {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 .panel-section.two-col { display: flex; gap: 1rem; }
 .panel-section.two-col > div { flex: 1; }
 .section-label {
   font-size: .7rem; letter-spacing: .1em; color: var(--text-muted);
-  text-transform: uppercase; margin-bottom: .4rem;
+  text-transform: uppercase; margin-bottom: .35rem;
+  flex-shrink: 0;
 }
 
 /* ── Health display ── */
-.health-row { display: flex; gap: .3rem; }
+.health-row { display: flex; gap: .3rem; min-height: 28px; align-items: center; }
 .health-heart {
   font-size: 1.2rem;
   transition: opacity .3s;
@@ -166,7 +176,9 @@ h1, h2, h3 { line-height: 1.2; }
 
 /* ── Event log ── */
 .event-log {
-  height: 120px; overflow-y: auto;
+  flex: 1;           /* fills .panel-section.flex-grow */
+  min-height: 100px; /* still useful when not in a flex-grow container */
+  overflow-y: auto;
   font-size: .78rem; color: var(--text-muted);
   background: var(--bg-deep); border-radius: 6px; padding: .4rem .6rem;
 }

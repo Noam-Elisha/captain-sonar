@@ -18,32 +18,6 @@
   <div class="placement-card">
     <h2>⚓ Place Your Submarine</h2>
     <p>Click any water tile to deploy</p>
-    <p class="placement-sub">Avoid islands &amp; sector boundaries are just guides</p>
-  </div>
-</div>
-
-<!-- Sonar modal -->
-<div id="sonar-modal" class="modal hidden">
-  <div class="modal-card">
-    <h3>📡 Sonar Ping</h3>
-    <p>Choose one Row, one Column, and one Sector to ask about the enemy:</p>
-    <label>Row (1–{{ map_rows }})<input type="number" id="sonar-row" min="1" max="{{ map_rows }}" value="1"/></label>
-    <label>Column (1–{{ map_cols }})<input type="number" id="sonar-col" min="1" max="{{ map_cols }}" value="1"/></label>
-    <label>Sector (1–9)<input type="number" id="sonar-sector" min="1" max="9" value="1"/></label>
-    <div class="modal-btns">
-      <button class="btn-cancel" onclick="closeSonar()">Cancel</button>
-      <button class="btn-confirm" onclick="submitSonar()">Ping!</button>
-    </div>
-  </div>
-</div>
-
-<!-- Drone modal -->
-<div id="drone-modal" class="modal hidden">
-  <div class="modal-card">
-    <h3>🛸 Drone Scan</h3>
-    <p>Which sector do you think the enemy is in?</p>
-    <div class="sector-grid" id="drone-sectors"></div>
-    <div class="modal-btns"><button class="btn-cancel" onclick="closeDrone()">Cancel</button></div>
   </div>
 </div>
 
@@ -92,18 +66,20 @@
       <span class="team-badge">{{ team | upper }} TEAM</span>
     </div>
 
-    <!-- Health -->
+    <!-- Own Health only (captain doesn't know enemy health) -->
     <div class="panel-section">
-      <div class="section-label">OWN HEALTH</div>
-      <div class="health-row" id="own-health"></div>
-      <div class="section-label" style="margin-top:.6rem">ENEMY HEALTH</div>
-      <div class="health-row" id="enemy-health"></div>
+      <div class="section-label">HULL INTEGRITY</div>
+      <div class="health-row fixed-health" id="own-health"></div>
     </div>
 
-    <!-- Systems -->
+    <!-- Weapons — captain fires blind (ask first mate for charge status) -->
     <div class="panel-section">
-      <div class="section-label">WEAPONS &amp; SYSTEMS</div>
-      <div class="systems-grid" id="systems-grid"></div>
+      <div class="section-label">WEAPONS &amp; SYSTEMS <span class="section-hint">ask first mate for status</span></div>
+      <div class="weapons-grid">
+        <button class="weapon-btn torpedo-btn" onclick="enterTargetMode('torpedo')">🚀 Fire Torpedo</button>
+        <button class="weapon-btn mine-btn"    onclick="enterTargetMode('mine')">💣 Place Mine</button>
+        <button class="weapon-btn stealth-btn" onclick="openStealth()">👻 Stealth</button>
+      </div>
     </div>
 
     <!-- Movement -->
@@ -112,16 +88,16 @@
       <div class="compass">
         <button class="compass-btn north" onclick="doMove('north')" id="btn-north">↑ N</button>
         <div class="compass-middle">
-          <button class="compass-btn west"  onclick="doMove('west')" id="btn-west">← W</button>
+          <button class="compass-btn west"    onclick="doMove('west')" id="btn-west">← W</button>
           <button class="compass-btn surface" onclick="doSurface()" id="btn-surface">⚠ SURFACE</button>
-          <button class="compass-btn east"  onclick="doMove('east')" id="btn-east">E →</button>
+          <button class="compass-btn east"    onclick="doMove('east')" id="btn-east">E →</button>
         </div>
         <button class="compass-btn south" onclick="doMove('south')" id="btn-south">↓ S</button>
       </div>
       <button class="btn-dive hidden" id="btn-dive" onclick="doDive()">🤿 DIVE</button>
     </div>
 
-    <!-- Mine detonation list -->
+    <!-- Mine detonation — also click 💣 on map -->
     <div class="panel-section" id="mine-det-panel" style="display:none">
       <div class="section-label">MINES PLACED</div>
       <div id="mine-list"></div>
@@ -136,7 +112,7 @@
     </div>
 
     <!-- Event log -->
-    <div class="panel-section">
+    <div class="panel-section flex-grow">
       <div class="section-label">EVENT LOG</div>
       <div class="event-log" id="event-log"></div>
     </div>

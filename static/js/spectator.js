@@ -1,12 +1,12 @@
 /* ============================================================
    Captain Sonar — spectator.js
    Full-visibility observer: sees both submarines, all systems,
-   all engineering boards, and can take notes on the map.
+   all engineering boards, and watches radio operators' drawings.
    ============================================================ */
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CELL_PX   = 32;
-const MAP_LABEL = 24;   // px for row/col label strip
+const MAP_LABEL = 24;
 const ISLAND_SET = new Set(ISLANDS.map(([r, c]) => `${r},${c}`));
 
 const SYSTEM_MAX    = { torpedo: 3, mine: 3, sonar: 3, drone: 4, stealth: 5 };
@@ -16,18 +16,19 @@ const ENG_DIR_ORDER = ['west', 'north', 'south', 'east'];
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let lastBlue = null, lastRed = null;
-let specTool = 'draw', specDrawing = false, specLastX = 0, specLastY = 0;
-let specCanvas, specCtx;
+
+// RO canvas layers (one per team)
+let roCanvases = {};   // { blue: {canvas, ctx}, red: {canvas, ctx} }
 
 // ── Socket ────────────────────────────────────────────────────────────────────
 const socket = io();
 
 socket.on('connect', () => {
-  socket.emit('join_room',        { game_id: GAME_ID });
+  socket.emit('join_room',         { game_id: GAME_ID });
   socket.emit('join_as_spectator', { game_id: GAME_ID, name: MY_NAME });
 });
 
-socket.on('spectator_ack', data => {
+socket.on('spectator_ack', () => {
   logEvent('👁 Connected as spectator', 'highlight');
   document.getElementById('spec-status').textContent = 'Watching live game';
 });
@@ -77,16 +78,14 @@ socket.on('stealth_announced', data => {
 });
 
 socket.on('damage', data => {
-  const t = data.team;
-  logEvent(`💥 [${t.toUpperCase()}] took ${data.amount} damage  (${data.health} HP remain)`, 'danger');
+  const cause = data.cause === 'system_failure' ? ' (system failure)' : '';
+  logEvent(`💥 [${data.team.toUpperCase()}] took ${data.amount} damage${cause} (${data.health} HP remain)`, 'danger');
 });
 
 socket.on('sonar_announced',  data => logEvent(`📡 [${data.team.toUpperCase()}] used sonar`));
 socket.on('drone_announced',  data => logEvent(`🛸 [${data.team.toUpperCase()}] drone → sector ${data.sector}`));
 
-socket.on('turn_start', data => {
-  setTurnBadge(data.team);
-});
+socket.on('turn_start', data => { setTurnBadge(data.team); });
 
 socket.on('game_phase', data => {
   if (data.current_team) setTurnBadge(data.current_team);
@@ -105,12 +104,43 @@ socket.on('sub_placed', data => {
   logEvent(`${data.team === 'blue' ? '🔵' : '🔴'} [${data.team.toUpperCase()}] submarine placed`, data.team);
 });
 
-socket.on('bot_chat', data => {
-  logEvent(`🤖 [${data.name}]: ${data.msg}`, 'bot');
-});
+socket.on('bot_chat', data => { logEvent(`🤖 [${data.name}]: ${data.msg}`, 'bot'); });
 
-socket.on('error', data => {
-  logEvent(`⚠ ${data.msg}`, 'danger');
+socket.on('error', data => { logEvent(`⚠ ${data.msg}`, 'danger'); });
+
+// ── RO canvas relay ───────────────────────────────────────────────────────────
+socket.on('ro_canvas_stroke', data => {
+  const team = data.team;
+  const layer = roCanvases[team];
+  if (!layer || !layer.ctx) return;
+  const { ctx, canvas } = layer;
+
+  if (data.tool === 'clear') {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  const x1 = data.x1 * canvas.width;
+  const y1 = data.y1 * canvas.height;
+  const x2 = data.x2 * canvas.width;
+  const y2 = data.y2 * canvas.height;
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+
+  if (data.tool === 'draw') {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = team === 'blue' ? '#60a5facc' : '#f87171cc';
+    ctx.lineWidth   = 4;
+    ctx.lineCap     = 'round';
+  } else if (data.tool === 'erase') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.lineWidth = 20;
+    ctx.lineCap   = 'round';
+  }
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
 });
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -172,7 +202,7 @@ function renderSystems(id, systems) {
     row.className = 'sys-row';
 
     const lbl  = document.createElement('span');
-    lbl.className = 'sys-lbl';
+    lbl.className   = 'sys-lbl';
     lbl.textContent = SYSTEM_LABELS[sys];
 
     const pips = document.createElement('span');
@@ -206,12 +236,10 @@ function renderEngBoard(id, board) {
     if (!nodes) return;
     const col = document.createElement('div');
     col.className = 'mini-col';
-
     const lbl = document.createElement('div');
     lbl.className   = 'mini-col-lbl';
     lbl.textContent = dir[0].toUpperCase();
     col.appendChild(lbl);
-
     nodes.forEach((node, ni) => {
       if (ni === 3) {
         const div = document.createElement('div');
@@ -259,12 +287,10 @@ function renderMap() {
   grid.style.gridTemplateColumns = `${MAP_LABEL}px repeat(${MAP_COLS}, ${CELL_PX}px)`;
   grid.style.gridTemplateRows    = `${MAP_LABEL}px repeat(${MAP_ROWS}, ${CELL_PX}px)`;
 
-  // Corner
   const corner = document.createElement('div');
   corner.className = 'map-label';
   grid.appendChild(corner);
 
-  // Column labels
   COL_LABELS.forEach(l => {
     const el = document.createElement('div');
     el.className   = 'map-label';
@@ -272,7 +298,6 @@ function renderMap() {
     grid.appendChild(el);
   });
 
-  // Rows + cells
   for (let r = 0; r < MAP_ROWS; r++) {
     const rl = document.createElement('div');
     rl.className   = 'map-label';
@@ -302,21 +327,34 @@ function renderMap() {
         + `top:${MAP_LABEL + startR * CELL_PX}px;`
         + `width:${(endC - startC) * CELL_PX}px;`
         + `height:${(endR - startR) * CELL_PX}px;`;
-      const lblEl = document.createElement('div');
-      lblEl.className   = 'sector-label';
-      lblEl.textContent = sr * sPerCol + sc + 1;
+      const lblEl        = document.createElement('div');
+      lblEl.className    = 'sector-label';
+      lblEl.textContent  = sr * sPerCol + sc + 1;
       box.appendChild(lblEl);
       wrapper.appendChild(box);
     }
   }
 
-  // Set SVG / canvas dimensions
   const totalW = MAP_LABEL + MAP_COLS * CELL_PX;
   const totalH = MAP_LABEL + MAP_ROWS * CELL_PX;
+
   const svg = document.getElementById('spec-svg');
   if (svg) { svg.setAttribute('width', totalW); svg.setAttribute('height', totalH); }
 
-  initSpecCanvas(totalW, totalH);
+  // Initialise RO drawing canvas layers
+  initROCanvases(totalW, totalH);
+}
+
+// ── RO canvas layers (blue + red) ─────────────────────────────────────────────
+function initROCanvases(w, h) {
+  ['blue', 'red'].forEach(team => {
+    const canvasEl = document.getElementById(`ro-canvas-${team}`);
+    if (!canvasEl) return;
+    canvasEl.width  = w;
+    canvasEl.height = h;
+    const ctx = canvasEl.getContext('2d');
+    roCanvases[team] = { canvas: canvasEl, ctx };
+  });
 }
 
 // ── SVG overlay for subs, trails, mines ───────────────────────────────────────
@@ -333,11 +371,9 @@ function redrawSVG(blue, red) {
   const ns = 'http://www.w3.org/2000/svg';
   svg.innerHTML = '';
 
-  // Trails
   drawTrail(svg, ns, blue?.trail, '#60a5fa', 0.55);
   drawTrail(svg, ns, red?.trail,  '#f87171', 0.55);
 
-  // Mines
   (blue?.mines || []).forEach(([r, c]) => {
     const { x, y } = cellCenter(r, c);
     drawMine(svg, ns, x, y, '#60a5fa');
@@ -347,7 +383,6 @@ function redrawSVG(blue, red) {
     drawMine(svg, ns, x, y, '#f87171');
   });
 
-  // Sub markers (drawn on top of trails)
   if (blue?.position) {
     const [r, c] = blue.position;
     const { x, y } = cellCenter(r, c);
@@ -378,19 +413,16 @@ function drawTrail(svg, ns, trail, color, opacity) {
 }
 
 function drawSub(svg, ns, x, y, fillColor, glowColor) {
-  // Glow aura
   const glow = document.createElementNS(ns, 'circle');
   glow.setAttribute('cx', x); glow.setAttribute('cy', y); glow.setAttribute('r', 15);
   glow.setAttribute('fill', fillColor); glow.setAttribute('fill-opacity', '0.18');
   svg.appendChild(glow);
 
-  // Main circle
   const c = document.createElementNS(ns, 'circle');
   c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 9);
   c.setAttribute('fill', fillColor); c.setAttribute('stroke', '#fff'); c.setAttribute('stroke-width', '2');
   svg.appendChild(c);
 
-  // Sub symbol
   const t = document.createElementNS(ns, 'text');
   t.setAttribute('x', x); t.setAttribute('y', y + 4);
   t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '10');
@@ -439,72 +471,6 @@ function flashExplosion(row, col, color) {
     ring.setAttribute('fill-opacity', String(Math.max(op, 0)));
     ring.setAttribute('stroke-opacity', String(Math.max(op * 1.5, 0)));
   }, 40);
-}
-
-// ── Spectator drawing canvas ───────────────────────────────────────────────────
-function initSpecCanvas(w, h) {
-  specCanvas = document.getElementById('spec-canvas');
-  if (!specCanvas) return;
-  specCtx = specCanvas.getContext('2d');
-  specCanvas.width  = w;
-  specCanvas.height = h;
-
-  specCanvas.addEventListener('mousedown',  startSpecDraw);
-  specCanvas.addEventListener('mousemove',  doSpecDraw);
-  specCanvas.addEventListener('mouseup',    stopSpecDraw);
-  specCanvas.addEventListener('mouseleave', stopSpecDraw);
-  specCanvas.addEventListener('touchstart',  e => { e.preventDefault(); startSpecDraw(e.touches[0]); }, { passive: false });
-  specCanvas.addEventListener('touchmove',   e => { e.preventDefault(); doSpecDraw(e.touches[0]); },   { passive: false });
-  specCanvas.addEventListener('touchend',    stopSpecDraw);
-}
-
-function getSpecPos(e) {
-  const rect = specCanvas.getBoundingClientRect();
-  return {
-    x: (e.clientX - rect.left) * (specCanvas.width  / rect.width),
-    y: (e.clientY - rect.top)  * (specCanvas.height / rect.height),
-  };
-}
-
-function startSpecDraw(e) {
-  specDrawing = true;
-  const p = getSpecPos(e);
-  specLastX = p.x; specLastY = p.y;
-}
-
-function doSpecDraw(e) {
-  if (!specDrawing) return;
-  const p = getSpecPos(e);
-  specCtx.beginPath();
-  specCtx.moveTo(specLastX, specLastY);
-  specCtx.lineTo(p.x, p.y);
-  if (specTool === 'draw') {
-    specCtx.globalCompositeOperation = 'source-over';
-    specCtx.strokeStyle = 'rgba(251,191,36,0.75)';
-    specCtx.lineWidth   = 3;
-    specCtx.lineCap     = 'round';
-  } else {
-    specCtx.globalCompositeOperation = 'destination-out';
-    specCtx.lineWidth = 20;
-    specCtx.lineCap   = 'round';
-  }
-  specCtx.stroke();
-  specLastX = p.x; specLastY = p.y;
-}
-
-function stopSpecDraw() { specDrawing = false; }
-
-function setSpecTool(tool) {
-  specTool = tool;
-  ['draw', 'erase'].forEach(t => {
-    const btn = document.getElementById('stool-' + t);
-    if (btn) btn.classList.toggle('active', t === tool);
-  });
-}
-
-function clearSpecCanvas() {
-  if (!confirm('Clear your spectator notes?')) return;
-  specCtx.clearRect(0, 0, specCanvas.width, specCanvas.height);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────

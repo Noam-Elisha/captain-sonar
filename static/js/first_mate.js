@@ -1,23 +1,25 @@
 /* ============================================================
    Captain Sonar — first_mate.js
+   FM charges systems and activates green systems (sonar/drone).
    ============================================================ */
 
-// GAME_ID, MY_NAME, MY_TEAM injected by template
+// GAME_ID, MY_NAME, MY_TEAM, MAP_ROWS, MAP_COLS injected by template
 
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
 
 const SYS_DEF = {
-  torpedo: {label:'🚀 Torpedo', max:3, color:'red',    desc:'Fires at targets within range 4'},
-  mine:    {label:'💣 Mine',    max:3, color:'red',    desc:'Place on adjacent cell, detonate anytime'},
-  sonar:   {label:'📡 Sonar',  max:3, color:'green',  desc:'Ask row / col / sector'},
-  drone:   {label:'🛸 Drone',  max:4, color:'green',  desc:'Confirm if enemy is in a sector'},
-  stealth: {label:'👻 Stealth',max:5, color:'yellow', desc:'Move silently 0–4 steps'},
+  torpedo: {label:'🚀 Torpedo', max:3, color:'red',    desc:'Captain fires — range 4'},
+  mine:    {label:'💣 Mine',    max:3, color:'red',    desc:'Captain places adjacent (incl. diagonal)'},
+  sonar:   {label:'📡 Sonar',  max:3, color:'green',  desc:'YOU activate — ask row/col/sector'},
+  drone:   {label:'🛸 Drone',  max:4, color:'green',  desc:'YOU activate — confirm sector'},
+  stealth: {label:'👻 Stealth',max:5, color:'yellow', desc:'Captain moves silently 0–4 steps'},
 };
 
 let systems    = {torpedo:{charge:0}, mine:{charge:0}, sonar:{charge:0}, drone:{charge:0}, stealth:{charge:0}};
 let myHealth   = 4;
-let enemyHealth= 4;
-let canCharge  = false;   // true after captain moves, before FM charges
+let canCharge  = false;
+let isMyTurn   = false;
+let systemUsed = false;
 
 const socket = io();
 
@@ -28,24 +30,24 @@ socket.on('connect', () => {
 
 socket.on('game_state', state => {
   if (!state || !state.submarines) return;
-  const mySub    = state.submarines[MY_TEAM];
-  const enemySub = state.submarines[ENEMY_TEAM];
-  if (mySub)    { myHealth    = mySub.health; systems = mySub.systems || systems; }
-  if (enemySub)   enemyHealth = enemySub.health;
+  const mySub = state.submarines[MY_TEAM];
+  if (mySub) { myHealth = mySub.health; systems = mySub.systems || systems; }
 
-  const isMyTurn = (state.current_team === MY_TEAM);
-  const moved    = state.turn_state && state.turn_state.moved;
-  const fmDone   = state.turn_state && state.turn_state.first_mate_done;
-  const dir      = state.turn_state && state.turn_state.direction;
-  canCharge = isMyTurn && moved && !fmDone && !!dir;
+  isMyTurn   = (state.current_team === MY_TEAM);
+  const ts   = state.turn_state || {};
+  const moved  = ts.moved || false;
+  const fmDone = ts.first_mate_done || false;
+  const dir    = ts.direction;
+  systemUsed   = ts.system_used || false;
+  canCharge    = isMyTurn && moved && !fmDone && !!dir;
 
   renderAll();
 });
 
 socket.on('systems_update', data => {
   systems   = data.systems;
-  canCharge = false;        // reset; server will send can_charge again on next move
-  renderAll();
+  canCharge = false;
+  renderSystems();
   logEvent('System charged!', 'highlight');
 });
 
@@ -57,29 +59,53 @@ socket.on('can_charge', () => {
 });
 
 socket.on('turn_start', data => {
-  canCharge = false;
+  canCharge  = false;
+  systemUsed = false;
+  isMyTurn   = (data.team === MY_TEAM);
   renderSystems();
   if (data.team !== MY_TEAM) {
     document.getElementById('charge-overlay').classList.remove('hidden');
     logEvent(`${data.team} team's turn`);
   } else {
     document.getElementById('charge-overlay').classList.add('hidden');
-    logEvent('OUR TURN — wait for captain to move', 'highlight');
+    logEvent('OUR TURN — wait for captain to move, then charge', 'highlight');
   }
 });
 
 socket.on('damage', data => {
-  if (data.team === MY_TEAM) myHealth    = data.health;
-  else                        enemyHealth = data.health;
-  renderHealth();
-  logEvent(`💥 ${data.team === MY_TEAM ? 'We' : 'Enemy'} took ${data.amount} damage (${data.health} HP)`, 'danger');
+  if (data.team === MY_TEAM) {
+    myHealth = data.health;
+    renderHealth();
+    const cause = data.cause === 'system_failure' ? '⚡ System failure! ' : '💥 ';
+    logEvent(`${cause}We took ${data.amount} damage (${data.health} HP)`, 'danger');
+  } else {
+    const cause = data.cause === 'system_failure' ? '⚡ Enemy system failure ' : '💥 Enemy took ';
+    logEvent(`${cause}${data.amount} damage`, 'danger');
+  }
 });
 
 socket.on('surface_announced', data => {
-  if (data.team === MY_TEAM) myHealth    = data.health;
-  else                        enemyHealth = data.health;
-  renderHealth();
+  if (data.team === MY_TEAM) { myHealth = data.health; renderHealth(); }
   logEvent(`${data.team} surfaced in sector ${data.sector}`, data.team === MY_TEAM ? 'danger' : '');
+});
+
+socket.on('sonar_result', data => {
+  const parts = [];
+  if (data.row_match)    parts.push('Row ✓');
+  if (data.col_match)    parts.push('Column ✓');
+  if (data.sector_match) parts.push('Sector ✓');
+  const none = parts.length === 0;
+  showToast(`Sonar: ${none ? 'No match 😔' : parts.join(', ') + ' matched!'}`, none);
+  logEvent(`📡 Sonar result: ${none ? 'no match' : parts.join(', ')}`, 'highlight');
+  systemUsed = true;
+  renderSystems();
+});
+
+socket.on('drone_result', data => {
+  showToast(data.in_sector ? `Drone: Enemy IS in sector ${data.ask_sector}! 🎯` : `Drone: Enemy NOT in sector ${data.ask_sector}`);
+  logEvent(`🛸 Drone → sector ${data.ask_sector}: ${data.in_sector ? 'YES' : 'NO'}`, 'highlight');
+  systemUsed = true;
+  renderSystems();
 });
 
 socket.on('game_over', data => {
@@ -92,28 +118,20 @@ socket.on('error', data => showToast(data.msg, true));
 
 socket.on('bot_chat', data => {
   const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
-  const icon = icons[data.role] || '🤖';
-  logEvent(`${icon} [${data.name}]: ${data.msg}`, 'bot');
+  logEvent(`${icons[data.role]||'🤖'} [${data.name}]: ${data.msg}`, 'bot');
 });
 
 // ── Render ────────────────────────────────────────────────────
-function renderAll() {
-  renderHealth();
-  renderSystems();
-}
+function renderAll() { renderHealth(); renderSystems(); }
 
 function renderHealth() {
-  renderHearts('own-health',   myHealth,    4);
-  renderHearts('enemy-health', enemyHealth, 4);
-}
-
-function renderHearts(id, hp, max) {
-  const el = document.getElementById(id);
+  const el = document.getElementById('own-health');
+  if (!el) return;
   el.innerHTML = '';
-  for (let i = 0; i < max; i++) {
+  for (let i = 0; i < 4; i++) {
     const s = document.createElement('span');
-    s.className = 'health-heart' + (i < hp ? '' : ' empty');
-    s.textContent = i < hp ? '❤️' : '🖤';
+    s.className   = 'health-heart' + (i < myHealth ? '' : ' empty');
+    s.textContent = i < myHealth ? '❤️' : '🖤';
     el.appendChild(s);
   }
 }
@@ -126,23 +144,29 @@ function renderSystems() {
     const cur   = s.charge || 0;
     const max   = s.max    || meta.max;
     const ready = s.ready  || (cur >= max);
+    const isGreen     = (sys === 'sonar' || sys === 'drone');
+    const canActivate = isGreen && ready && isMyTurn && !systemUsed;
 
-    const card  = document.createElement('div');
-    card.className = `sys-card sys-${sys}${canCharge && !ready ? ' can-charge' : ''}${ready ? ' is-ready' : ''}`;
+    const card     = document.createElement('div');
+    card.className = `sys-card sys-${sys}${canCharge && !ready ? ' can-charge' : ''}${ready ? ' is-ready' : ''}${canActivate ? ' can-activate' : ''}`;
 
-    // Ready badge
-    const badge = document.createElement('div');
-    badge.className = 'sys-ready-badge' + (ready ? '' : ' hidden');
-    badge.textContent = '✓ READY';
-    card.appendChild(badge);
+    // Badge
+    if (canActivate) {
+      const badge     = document.createElement('div');
+      badge.className = 'sys-act-badge';
+      badge.textContent = '▶ READY TO ACTIVATE';
+      card.appendChild(badge);
+    } else if (ready) {
+      const badge     = document.createElement('div');
+      badge.className = 'sys-ready-badge';
+      badge.textContent = isGreen ? '✓ READY' : '✓ READY';
+      card.appendChild(badge);
+    }
 
     // Header
     const hdr = document.createElement('div');
     hdr.className = 'sys-card-header';
-    hdr.innerHTML = `
-      <span class="sys-card-name">${meta.label}</span>
-      <span class="sys-card-cost">${cur}/${max}</span>
-    `;
+    hdr.innerHTML = `<span class="sys-card-name">${meta.label}</span><span class="sys-card-cost">${cur}/${max}</span>`;
     card.appendChild(hdr);
 
     // Dots
@@ -155,13 +179,29 @@ function renderSystems() {
     }
     card.appendChild(dotsRow);
 
+    // Desc
+    const desc = document.createElement('div');
+    desc.className   = 'sys-desc';
+    desc.textContent = meta.desc;
+    card.appendChild(desc);
+
     // Charge button
-    const btn = document.createElement('button');
+    const btn     = document.createElement('button');
     btn.className = 'btn-charge';
-    btn.textContent = ready ? 'Fully Charged' : 'Charge';
-    btn.disabled = !canCharge || ready;
-    btn.onclick  = () => chargeSystem(sys);
+    btn.textContent = ready ? 'Fully Charged' : 'Charge +1';
+    btn.disabled    = !canCharge || ready;
+    btn.onclick     = () => chargeSystem(sys);
     card.appendChild(btn);
+
+    // Activate button for green systems
+    if (isGreen) {
+      const actBtn     = document.createElement('button');
+      actBtn.className = 'btn-activate';
+      actBtn.textContent = sys === 'sonar' ? '📡 Use Sonar' : '🛸 Use Drone';
+      actBtn.disabled    = !canActivate;
+      actBtn.onclick     = () => activateSystem(sys);
+      card.appendChild(actBtn);
+    }
 
     panel.appendChild(card);
   });
@@ -170,27 +210,62 @@ function renderSystems() {
 function chargeSystem(sys) {
   if (!canCharge) return;
   socket.emit('first_mate_charge', {game_id: GAME_ID, name: MY_NAME, system: sys});
-  canCharge = false;   // optimistic: prevent double-charge until server updates
+  canCharge = false;
   renderSystems();
+}
+
+function activateSystem(sys) {
+  if (sys === 'sonar') openSonar();
+  else if (sys === 'drone') openDrone();
+}
+
+// ── Sonar ─────────────────────────────────────────────────────
+function openSonar()  { document.getElementById('sonar-modal').classList.remove('hidden'); }
+function closeSonar() { document.getElementById('sonar-modal').classList.add('hidden');    }
+function submitSonar() {
+  const askRow    = parseInt(document.getElementById('sonar-row').value)    - 1;
+  const askCol    = parseInt(document.getElementById('sonar-col').value)    - 1;
+  const askSector = parseInt(document.getElementById('sonar-sector').value);
+  closeSonar();
+  socket.emit('first_mate_sonar', {
+    game_id: GAME_ID, name: MY_NAME,
+    ask_row: askRow, ask_col: askCol, ask_sector: askSector,
+  });
+}
+
+// ── Drone ─────────────────────────────────────────────────────
+function openDrone() {
+  const sGrid = document.getElementById('drone-sectors');
+  sGrid.innerHTML = '';
+  for (let s = 1; s <= 9; s++) {
+    const btn     = document.createElement('button');
+    btn.textContent = s;
+    btn.onclick     = () => submitDrone(s);
+    sGrid.appendChild(btn);
+  }
+  document.getElementById('drone-modal').classList.remove('hidden');
+}
+function closeDrone()     { document.getElementById('drone-modal').classList.add('hidden'); }
+function submitDrone(sector) {
+  closeDrone();
+  socket.emit('first_mate_drone', {game_id: GAME_ID, name: MY_NAME, sector});
 }
 
 // ── Helpers ───────────────────────────────────────────────────
 function logEvent(msg, cls) {
   const log   = document.getElementById('event-log');
   const entry = document.createElement('div');
-  entry.className = 'log-entry' + (cls ? ' ' + cls : '');
+  entry.className   = 'log-entry' + (cls ? ' ' + cls : '');
   entry.textContent = msg;
   log.prepend(entry);
   while (log.children.length > 50) log.lastChild.remove();
 }
 
 function showToast(msg, isError) {
-  const t = document.getElementById('result-toast');
+  const t       = document.getElementById('result-toast');
   t.textContent = msg;
   t.className   = 'result-toast' + (isError ? ' error' : '');
   setTimeout(() => t.classList.add('hidden'), 4000);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  renderAll();
-});
+document.addEventListener('DOMContentLoaded', () => { renderAll(); });

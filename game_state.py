@@ -451,25 +451,33 @@ def has_valid_move(game, team):
 
 
 def captain_fire_torpedo(game, team, target_row, target_col):
-    """Fire a torpedo. Returns (ok, error_msg, events)."""
+    """Fire a torpedo. Returns (ok, error_msg, events).
+    If system unavailable: takes 1 damage instead of firing."""
     if current_team(game) != team:
         return False, "Not your turn", []
     if game["phase"] != "playing":
         return False, "Game not active", []
     if game["turn_state"]["system_used"]:
-        return False, "Already used a system this turn – move first", []
-    sub = game["submarines"][team]
-    if not _check_charge(sub, "torpedo"):
-        return False, "Torpedo not charged", []
-    if is_system_blocked(sub["engineering"], "torpedo"):
-        return False, "Torpedo blocked by engineer breakdown (red nodes marked)", []
+        return False, "Already used a system this turn", []
     if not is_valid_position(game, target_row, target_col):
         return False, "Invalid target", []
 
+    sub = game["submarines"][team]
     r, c = sub["position"]
     dist = abs(target_row - r) + abs(target_col - c)
     if dist > 4 or dist == 0:
         return False, "Torpedo range: 1–4 spaces (Manhattan distance)", []
+
+    # System unavailable (not charged or blocked) → 1 damage, no shot
+    if not _check_charge(sub, "torpedo") or is_system_blocked(sub["engineering"], "torpedo"):
+        sub["health"] -= 1
+        game["turn_state"]["system_used"] = True
+        events = [{"type": "damage", "team": team, "amount": 1,
+                   "health": sub["health"], "cause": "system_failure"}]
+        result = _check_game_over(game)
+        if result:
+            events.append(result)
+        return True, "System unavailable — took 1 damage", events
 
     _use_system(sub, "torpedo")
     game["turn_state"]["system_used"] = True
@@ -480,27 +488,35 @@ def captain_fire_torpedo(game, team, target_row, target_col):
 
 
 def captain_place_mine(game, team, target_row, target_col):
-    """Place a mine on an adjacent cell. Returns (ok, error_msg, events)."""
+    """Place a mine on an adjacent cell (incl. diagonal). Returns (ok, error_msg, events)."""
     if current_team(game) != team:
         return False, "Not your turn", []
     if game["turn_state"]["system_used"]:
-        return False, "Already used a system this turn – move first", []
-    sub = game["submarines"][team]
-    if not _check_charge(sub, "mine"):
-        return False, "Mine not charged", []
-    if is_system_blocked(sub["engineering"], "mine"):
-        return False, "Mine blocked by engineer breakdown (red nodes marked)", []
+        return False, "Already used a system this turn", []
     if not is_valid_position(game, target_row, target_col):
         return False, "Invalid target", []
 
+    sub = game["submarines"][team]
     r, c = sub["position"]
-    dist = abs(target_row - r) + abs(target_col - c)
-    if dist != 1:
-        return False, "Mine must be placed on an adjacent cell", []
+    row_dist = abs(target_row - r)
+    col_dist = abs(target_col - c)
+    if max(row_dist, col_dist) != 1:   # Chebyshev distance (8 adjacent cells incl. diagonal)
+        return False, "Mine must be placed on an adjacent cell (including diagonal)", []
 
     # Can't place on route (trail lines) – rulebook explicit
     if [target_row, target_col] in sub["trail"]:
         return False, "Cannot place mine on a cell already in your route", []
+
+    # System unavailable (not charged or blocked) → 1 damage, no mine placed
+    if not _check_charge(sub, "mine") or is_system_blocked(sub["engineering"], "mine"):
+        sub["health"] -= 1
+        game["turn_state"]["system_used"] = True
+        events = [{"type": "damage", "team": team, "amount": 1,
+                   "health": sub["health"], "cause": "system_failure"}]
+        result = _check_game_over(game)
+        if result:
+            events.append(result)
+        return True, "System unavailable — took 1 damage", events
 
     _use_system(sub, "mine")
     game["turn_state"]["system_used"] = True
@@ -633,6 +649,7 @@ def captain_use_stealth(game, team, direction, steps):
     Rulebook: "moves his submarine up to four spaces in a straight line."
     direction: one of 'north'/'south'/'east'/'west'
     steps: integer 0-4 (how many spaces to move in that direction)
+    If system unavailable: takes 1 damage instead of moving.
     Returns (ok, error_msg, events)
     """
     if current_team(game) != team:
@@ -640,16 +657,28 @@ def captain_use_stealth(game, team, direction, steps):
     if game["turn_state"]["moved"]:
         return False, "Already moved this turn", []
     if game["turn_state"]["system_used"]:
-        return False, "Already used a system this turn – move first", []
-    sub = game["submarines"][team]
-    if not _check_charge(sub, "stealth"):
-        return False, "Stealth not charged", []
-    if is_system_blocked(sub["engineering"], "stealth"):
-        return False, "Stealth blocked by engineer breakdown (yellow nodes marked)", []
+        return False, "Already used a system this turn", []
     if direction not in ("north", "south", "east", "west"):
         return False, f"Invalid direction: {direction}", []
     if not isinstance(steps, int) or steps < 0 or steps > 4:
         return False, "Stealth: steps must be 0–4", []
+
+    sub = game["submarines"][team]
+
+    # System unavailable → 1 damage, no movement
+    if not _check_charge(sub, "stealth") or is_system_blocked(sub["engineering"], "stealth"):
+        sub["health"] -= 1
+        game["turn_state"]["system_used"] = True
+        game["turn_state"]["moved"] = True
+        game["turn_state"]["direction"] = None
+        game["turn_state"]["engineer_done"] = True
+        game["turn_state"]["first_mate_done"] = True
+        events = [{"type": "damage", "team": team, "amount": 1,
+                   "health": sub["health"], "cause": "system_failure"}]
+        result = _check_game_over(game)
+        if result:
+            events.append(result)
+        return True, "System unavailable — took 1 damage", events
 
     # Validate straight-line path
     r, c = sub["position"]

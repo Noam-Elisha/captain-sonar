@@ -197,13 +197,14 @@ def _dispatch_events(game_id, game, events):
             socketio.emit("sonar_announced", {"team": ev["team"]}, room=game_id)
 
         elif t == "sonar_result":
-            _emit_to_team_role(game_id, ev["target"], "captain", "sonar_result",
+            # Result goes to first_mate (sonar is operated by first mate)
+            _emit_to_team_role(game_id, ev["target"], "first_mate", "sonar_result",
                                 {"row_match":    ev["row_match"],
                                  "col_match":    ev["col_match"],
                                  "sector_match": ev["sector_match"]})
             _emit_to_team_role(game_id, ev["target"], "first_mate", "systems_update",
                                 {"systems": game["submarines"][ev["target"]]["systems"]})
-            # Update captain bot's sonar knowledge
+            # Update captain bot sonar knowledge (internal bot state only)
             _update_captain_bot_sonar(game_id, ev["target"],
                                        ev["row_match"], ev["col_match"], ev["sector_match"])
 
@@ -213,11 +214,13 @@ def _dispatch_events(game_id, game, events):
                           room=game_id)
 
         elif t == "drone_result":
-            _emit_to_team_role(game_id, ev["target"], "captain", "drone_result",
-                                {"in_sector": ev["in_sector"]})
+            # Result goes to first_mate (drone is operated by first mate)
+            _emit_to_team_role(game_id, ev["target"], "first_mate", "drone_result",
+                                {"in_sector": ev["in_sector"],
+                                 "ask_sector": ev.get("ask_sector", 0)})
             _emit_to_team_role(game_id, ev["target"], "first_mate", "systems_update",
                                 {"systems": game["submarines"][ev["target"]]["systems"]})
-            # Update captain bot's drone knowledge
+            # Update captain bot drone knowledge (internal bot state only)
             _update_captain_bot_drone(game_id, ev["target"],
                                        ev.get("ask_sector", 0), ev["in_sector"])
 
@@ -1329,6 +1332,70 @@ def on_first_mate_charge(data):
     _dispatch_events(game_id, g["game"], events)
     emit("systems_update", {"systems": g["game"]["submarines"][p["team"]]["systems"]})
     _check_turn_auto_advance(game_id, g["game"])
+
+
+@socketio.on("first_mate_sonar")
+def on_first_mate_sonar(data):
+    """First mate activates sonar (green system — operated by FM, not captain)."""
+    game_id    = (data.get("game_id") or "").upper()
+    name       = data.get("name", "")
+    ask_row    = data.get("ask_row")
+    ask_col    = data.get("ask_col")
+    ask_sector = data.get("ask_sector")
+
+    g = games.get(game_id)
+    if not g or g["game"] is None:
+        return emit("error", {"msg": "Game not found"})
+
+    p = _get_player(game_id, name)
+    if not p or p["role"] != "first_mate":
+        return emit("error", {"msg": "Only the first mate can use sonar"})
+    if g["game"]["phase"] != "playing":
+        return emit("error", {"msg": "Game is not in playing phase"})
+
+    ok, msg, events = gs.captain_use_sonar(g["game"], p["team"], ask_row, ask_col, ask_sector)
+    if not ok:
+        return emit("error", {"msg": msg})
+
+    _dispatch_events(game_id, g["game"], events)
+    _check_turn_auto_advance(game_id, g["game"])
+
+
+@socketio.on("first_mate_drone")
+def on_first_mate_drone(data):
+    """First mate activates drone (green system — operated by FM, not captain)."""
+    game_id    = (data.get("game_id") or "").upper()
+    name       = data.get("name", "")
+    ask_sector = data.get("sector")
+
+    g = games.get(game_id)
+    if not g or g["game"] is None:
+        return emit("error", {"msg": "Game not found"})
+
+    p = _get_player(game_id, name)
+    if not p or p["role"] != "first_mate":
+        return emit("error", {"msg": "Only the first mate can use drone"})
+    if g["game"]["phase"] != "playing":
+        return emit("error", {"msg": "Game is not in playing phase"})
+
+    ok, msg, events = gs.captain_use_drone(g["game"], p["team"], ask_sector)
+    if not ok:
+        return emit("error", {"msg": msg})
+
+    _dispatch_events(game_id, g["game"], events)
+    _check_turn_auto_advance(game_id, g["game"])
+
+
+@socketio.on("ro_canvas_stroke")
+def on_ro_canvas_stroke(data):
+    """Radio operator canvas stroke — relay to spectators only."""
+    game_id = (data.get("game_id") or "").upper()
+    if game_id not in games:
+        return
+    # Relay to all connected spectators
+    for spec in _get_spectators(game_id).values():
+        if spec.get("sid"):
+            socketio.emit("ro_canvas_stroke", data, room=spec["sid"])
 
 
 # ── Auto-advance helper ───────────────────────────────────────────────────────

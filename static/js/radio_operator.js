@@ -1,5 +1,8 @@
 /* ============================================================
    Captain Sonar — radio_operator.js
+   Tracks enemy movements, draws on overlay canvas.
+   Pan mode: drag the drawing overlay to compare different map positions.
+   Canvas strokes relayed to spectators via socket.
    ============================================================ */
 
 // GAME_ID, MY_NAME, MY_TEAM, MAP_ROWS, MAP_COLS, SECTOR_SZ, ISLANDS, COL_LABELS
@@ -8,15 +11,23 @@ const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
 const CELL_PX    = 32;
 const ISLAND_SET = new Set(ISLANDS.map(([r,c]) => `${r},${c}`));
 
-let myHealth     = 4;
-let enemyHealth  = 4;
-let moveCount    = 0;
+let myHealth    = 4;
+let enemyHealth = 4;
+let moveCount   = 0;
 
 // Drawing state
-let currentTool  = 'draw';   // 'draw' | 'erase'
-let isDrawing    = false;
-let lastX        = 0, lastY = 0;
+let currentTool = 'draw';   // 'draw' | 'erase' | 'pan'
+let isDrawing   = false;
+let lastX = 0, lastY = 0;
 let canvas, ctx;
+
+// Pan state
+let isPanning  = false;
+let panStartX  = 0, panStartY  = 0;
+let panOffsetX = 0, panOffsetY = 0;
+
+// Stroke buffer for relay (collect points in one drag)
+let strokeBuffer = null;  // {points: [{x,y}], tool}
 
 const socket = io();
 
@@ -34,7 +45,6 @@ socket.on('game_state', state => {
   renderHealth();
 });
 
-// Enemy direction announcements — RO tracks these
 socket.on('direction_announced', data => {
   if (data.team === ENEMY_TEAM) {
     logMove(data.direction, 'move');
@@ -52,7 +62,7 @@ socket.on('surface_announced', data => {
       `Enemy surfaced in sector ${data.sector}!`;
   }
   if (data.team === MY_TEAM) { myHealth = data.health; renderHealth(); }
-  else { enemyHealth = data.health; renderHealth(); }
+  else                         { enemyHealth = data.health; renderHealth(); }
 });
 
 socket.on('stealth_announced', data => {
@@ -65,9 +75,7 @@ socket.on('stealth_announced', data => {
 });
 
 socket.on('torpedo_fired', data => {
-  if (data.team === ENEMY_TEAM) {
-    logEvent(`⚠ Enemy fired torpedo!`, 'danger');
-  }
+  if (data.team === ENEMY_TEAM) logEvent(`⚠ Enemy fired torpedo!`, 'danger');
 });
 
 socket.on('sonar_announced', data => {
@@ -94,8 +102,7 @@ socket.on('error', data => showToast(data.msg, true));
 
 socket.on('bot_chat', data => {
   const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
-  const icon = icons[data.role] || '🤖';
-  logEvent(`${icon} [${data.name}]: ${data.msg}`, 'bot');
+  logEvent(`${icons[data.role]||'🤖'} [${data.name}]: ${data.msg}`, 'bot');
 });
 
 // ── Map Rendering ─────────────────────────────────────────────
@@ -111,17 +118,16 @@ function renderMap() {
 
   COL_LABELS.forEach(l => {
     const el = document.createElement('div');
-    el.className = 'map-label';
+    el.className   = 'map-label';
     el.textContent = l;
     grid.appendChild(el);
   });
 
   for (let r = 0; r < MAP_ROWS; r++) {
     const rl = document.createElement('div');
-    rl.className = 'map-label';
+    rl.className   = 'map-label';
     rl.textContent = r + 1;
     grid.appendChild(rl);
-
     for (let c = 0; c < MAP_COLS; c++) {
       const cell = document.createElement('div');
       cell.className = 'map-cell';
@@ -136,7 +142,7 @@ function renderMap() {
   const sPerCol = Math.ceil(MAP_COLS / SECTOR_SZ);
   for (let sr = 0; sr < sPerRow; sr++) {
     for (let sc = 0; sc < sPerCol; sc++) {
-      const box = document.createElement('div');
+      const box    = document.createElement('div');
       box.className = 'sector-box';
       const startR = sr * SECTOR_SZ, startC = sc * SECTOR_SZ;
       const endR   = Math.min(startR + SECTOR_SZ, MAP_ROWS);
@@ -146,9 +152,9 @@ function renderMap() {
       box.style.top      = (1*16 + 24 + startR * CELL_PX) + 'px';
       box.style.width    = ((endC - startC) * CELL_PX) + 'px';
       box.style.height   = ((endR - startR) * CELL_PX) + 'px';
-      const lblEl = document.createElement('div');
-      lblEl.className   = 'sector-label';
-      lblEl.textContent = sr * sPerCol + sc + 1;
+      const lblEl        = document.createElement('div');
+      lblEl.className    = 'sector-label';
+      lblEl.textContent  = sr * sPerCol + sc + 1;
       box.appendChild(lblEl);
       wrapper.appendChild(box);
     }
@@ -165,15 +171,14 @@ function initCanvas() {
   canvas.width  = totalW;
   canvas.height = totalH;
 
-  canvas.addEventListener('mousedown',  startDraw);
-  canvas.addEventListener('mousemove',  draw);
-  canvas.addEventListener('mouseup',    stopDraw);
-  canvas.addEventListener('mouseleave', stopDraw);
+  canvas.addEventListener('mousedown',  onMouseDown);
+  canvas.addEventListener('mousemove',  onMouseMove);
+  canvas.addEventListener('mouseup',    onMouseUp);
+  canvas.addEventListener('mouseleave', onMouseUp);
 
-  // Touch support
-  canvas.addEventListener('touchstart',  e => { e.preventDefault(); startDraw(e.touches[0]); }, {passive:false});
-  canvas.addEventListener('touchmove',   e => { e.preventDefault(); draw(e.touches[0]); },      {passive:false});
-  canvas.addEventListener('touchend',    stopDraw);
+  canvas.addEventListener('touchstart',  e => { e.preventDefault(); onMouseDown(e.touches[0]); }, {passive:false});
+  canvas.addEventListener('touchmove',   e => { e.preventDefault(); onMouseMove(e.touches[0]); }, {passive:false});
+  canvas.addEventListener('touchend',    onMouseUp);
 }
 
 function getPos(e) {
@@ -184,13 +189,28 @@ function getPos(e) {
   };
 }
 
-function startDraw(e) {
-  isDrawing = true;
-  const p = getPos(e);
+function onMouseDown(e) {
+  if (currentTool === 'pan') {
+    isPanning  = true;
+    panStartX  = e.clientX - panOffsetX;
+    panStartY  = e.clientY - panOffsetY;
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
+  isDrawing    = true;
+  strokeBuffer = {points: [], tool: currentTool};
+  const p      = getPos(e);
   lastX = p.x; lastY = p.y;
+  strokeBuffer.points.push({x: p.x, y: p.y});
 }
 
-function draw(e) {
+function onMouseMove(e) {
+  if (currentTool === 'pan' && isPanning) {
+    panOffsetX = e.clientX - panStartX;
+    panOffsetY = e.clientY - panStartY;
+    canvas.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
+    return;
+  }
   if (!isDrawing) return;
   const p = getPos(e);
 
@@ -200,7 +220,7 @@ function draw(e) {
 
   if (currentTool === 'draw') {
     ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = ENEMY_TEAM === 'red' ? '#f87171aa' : '#60a5faaa';
+    ctx.strokeStyle = ENEMY_TEAM === 'red' ? '#f87171cc' : '#60a5facc';
     ctx.lineWidth   = 4;
     ctx.lineCap     = 'round';
   } else {
@@ -210,35 +230,63 @@ function draw(e) {
   }
 
   ctx.stroke();
+
+  // Buffer point for relay
+  if (strokeBuffer) strokeBuffer.points.push({x: p.x, y: p.y});
+
+  // Relay segment to spectators
+  const cw = canvas.width, ch = canvas.height;
+  socket.emit('ro_canvas_stroke', {
+    game_id: GAME_ID,
+    team:    MY_TEAM,
+    tool:    currentTool,
+    x1: lastX / cw, y1: lastY / ch,
+    x2: p.x  / cw, y2: p.y  / ch,
+  });
+
   lastX = p.x; lastY = p.y;
 }
 
-function stopDraw() { isDrawing = false; }
+function onMouseUp() {
+  isDrawing    = false;
+  isPanning    = false;
+  strokeBuffer = null;
+  if (currentTool === 'pan') canvas.style.cursor = 'grab';
+}
 
 function setTool(tool) {
   currentTool = tool;
-  ['draw','erase'].forEach(t => {
-    document.getElementById('tool-'+t).classList.toggle('active', t === tool);
+  ['draw','erase','pan'].forEach(t => {
+    const btn = document.getElementById('tool-'+t);
+    if (btn) btn.classList.toggle('active', t === tool);
   });
+  if (tool === 'pan') canvas.style.cursor = 'grab';
+  else                canvas.style.cursor = 'crosshair';
 }
 
 function clearAll() {
   if (!confirm('Clear all drawings?')) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Relay full clear to spectators
+  socket.emit('ro_canvas_stroke', {
+    game_id: GAME_ID,
+    team:    MY_TEAM,
+    tool:    'clear',
+  });
 }
 
 // ── Health ────────────────────────────────────────────────────
 function renderHealth() {
   renderHearts('own-health',   myHealth,    4);
-  renderHearts('enemy-health', enemyHealth, 4);
 }
 
 function renderHearts(id, hp, max) {
   const el = document.getElementById(id);
+  if (!el) return;
   el.innerHTML = '';
   for (let i = 0; i < max; i++) {
     const s = document.createElement('span');
-    s.className = 'health-heart' + (i < hp ? '' : ' empty');
+    s.className   = 'health-heart' + (i < hp ? '' : ' empty');
     s.textContent = i < hp ? '❤️' : '🖤';
     el.appendChild(s);
   }
@@ -259,14 +307,14 @@ function logMove(dir, type) {
 function logEvent(msg, cls) {
   const log   = document.getElementById('event-log');
   const entry = document.createElement('div');
-  entry.className = 'log-entry' + (cls ? ' ' + cls : '');
+  entry.className   = 'log-entry' + (cls ? ' ' + cls : '');
   entry.textContent = msg;
   log.prepend(entry);
   while (log.children.length > 50) log.lastChild.remove();
 }
 
 function showToast(msg, isError) {
-  const t = document.getElementById('result-toast');
+  const t       = document.getElementById('result-toast');
   t.textContent = msg;
   t.className   = 'result-toast' + (isError ? ' error' : '');
   setTimeout(() => t.classList.add('hidden'), 4000);

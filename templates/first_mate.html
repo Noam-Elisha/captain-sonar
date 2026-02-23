@@ -13,6 +13,31 @@
 </div>
 <div id="result-toast" class="result-toast hidden"></div>
 
+<!-- Sonar modal -->
+<div id="sonar-modal" class="modal hidden">
+  <div class="modal-card">
+    <h3>📡 Sonar Ping</h3>
+    <p>Ask about one Row, one Column, and one Sector:</p>
+    <label>Row (1–{{ map_rows }})<input type="number" id="sonar-row" min="1" max="{{ map_rows }}" value="1"/></label>
+    <label>Column (1–{{ map_cols }})<input type="number" id="sonar-col" min="1" max="{{ map_cols }}" value="1"/></label>
+    <label>Sector (1–9)<input type="number" id="sonar-sector" min="1" max="9" value="1"/></label>
+    <div class="modal-btns">
+      <button class="btn-cancel"  onclick="closeSonar()">Cancel</button>
+      <button class="btn-confirm" onclick="submitSonar()">Ping!</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drone modal -->
+<div id="drone-modal" class="modal hidden">
+  <div class="modal-card">
+    <h3>🛸 Drone Scan</h3>
+    <p>Which sector do you think the enemy is in?</p>
+    <div class="sector-grid" id="drone-sectors"></div>
+    <div class="modal-btns"><button class="btn-cancel" onclick="closeDrone()">Cancel</button></div>
+  </div>
+</div>
+
 <div class="app-layout">
   <div class="ctrl-panel full-width">
     <div class="role-header team-{{ team }}">
@@ -20,29 +45,23 @@
       <span class="team-badge">{{ team | upper }} TEAM</span>
     </div>
 
-    <!-- Health -->
-    <div class="panel-section two-col">
-      <div>
-        <div class="section-label">OWN HEALTH</div>
-        <div class="health-row" id="own-health"></div>
-      </div>
-      <div>
-        <div class="section-label">ENEMY HEALTH</div>
-        <div class="health-row" id="enemy-health"></div>
-      </div>
+    <!-- Health (own only) -->
+    <div class="panel-section">
+      <div class="section-label">OWN HEALTH</div>
+      <div class="health-row fixed-health" id="own-health"></div>
     </div>
 
-    <div class="section-label" style="margin:.8rem 1rem .4rem">
-      CHARGE A SYSTEM — click one per turn after captain moves
+    <div class="section-label" style="margin:.6rem 1rem .3rem">
+      SYSTEMS — charge one per turn · activate green systems anytime
     </div>
 
-    <!-- Systems -->
+    <!-- Systems panel -->
     <div class="systems-panel" id="systems-panel">
       <!-- Injected by JS -->
     </div>
 
     <!-- Event log -->
-    <div class="panel-section">
+    <div class="panel-section flex-grow">
       <div class="section-label">EVENT LOG</div>
       <div class="event-log" id="event-log"></div>
     </div>
@@ -50,9 +69,11 @@
 </div>
 
 <script>
-  const GAME_ID  = "{{ game_id }}";
-  const MY_NAME  = "{{ player_name }}";
-  const MY_TEAM  = "{{ team }}";
+  const GAME_ID   = "{{ game_id }}";
+  const MY_NAME   = "{{ player_name }}";
+  const MY_TEAM   = "{{ team }}";
+  const MAP_ROWS  = {{ map_rows }};
+  const MAP_COLS  = {{ map_cols }};
 </script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="/static/js/first_mate.js"></script>

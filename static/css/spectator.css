@@ -77,8 +77,8 @@
 
 /* ── Team panels ──────────────────────────────────────────────── */
 .spec-team-panel {
-  width: 200px;
-  min-width: 160px;
+  width: 220px;
+  min-width: 170px;
   flex-shrink: 0;
   background: var(--bg-panel);
   overflow-y: auto;

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
@@ -28,7 +28,7 @@
       <div class="stp-title blue">🔵 BLUE TEAM</div>
       <div class="stp-section">
         <div class="section-label">HEALTH</div>
-        <div class="health-row" id="blue-health"></div>
+        <div class="health-row fixed-health" id="blue-health"></div>
       </div>
       <div class="stp-section">
         <div class="section-label">SYSTEMS</div>
@@ -49,14 +49,11 @@
     <div class="spec-map-area">
       <div class="map-wrapper" id="spec-wrapper" style="position:relative;display:inline-block">
         <div id="spec-map" class="map-grid"></div>
+        <!-- SVG: subs, trails, mines -->
         <svg id="spec-svg" style="position:absolute;top:0;left:0;pointer-events:none;overflow:visible;z-index:2;"></svg>
-        <canvas id="spec-canvas" style="position:absolute;top:0;left:0;z-index:3;cursor:crosshair;opacity:0.85;"></canvas>
-      </div>
-      <div class="spec-canvas-toolbar">
-        <span style="color:var(--text-muted);font-size:.75rem;margin-right:.4rem;">Your notes:</span>
-        <button class="tool-btn active" id="stool-draw"  onclick="setSpecTool('draw')">✏ Draw</button>
-        <button class="tool-btn"        id="stool-erase" onclick="setSpecTool('erase')">⌫ Erase</button>
-        <button class="tool-btn"        id="stool-clear" onclick="clearSpecCanvas()">✕ Clear</button>
+        <!-- RO drawing layers (one per team, no pointer-events) -->
+        <canvas id="ro-canvas-blue" style="position:absolute;top:0;left:0;pointer-events:none;z-index:3;opacity:0.75;"></canvas>
+        <canvas id="ro-canvas-red"  style="position:absolute;top:0;left:0;pointer-events:none;z-index:3;opacity:0.75;"></canvas>
       </div>
     </div>
 
@@ -65,7 +62,7 @@
       <div class="stp-title red">🔴 RED TEAM</div>
       <div class="stp-section">
         <div class="section-label">HEALTH</div>
-        <div class="health-row" id="red-health"></div>
+        <div class="health-row fixed-health" id="red-health"></div>
       </div>
       <div class="stp-section">
         <div class="section-label">SYSTEMS</div>
