@@ -266,9 +266,14 @@ class CaptainBot:
     # ── Weapon helpers ─────────────────────────────────────────────────────────
 
     def _best_torpedo_target(self, r, c, sector, map_def, island_set):
-        """Pick the closest in-range cell inside the target sector."""
+        """Pick the closest in-range cell inside the target sector.
+        RULEBOOK: TBT uses 4 sectors (2×2). Must use ceiling division to match
+        get_sector() so sector boundaries align correctly on a 15×15 map with
+        sector_size=8 (ceil(15/8)=2 per axis, not 1)."""
+        import math
         sector_size = map_def["sector_size"]
-        spr = map_def["cols"] // sector_size
+        # MUST use ceil (not floor //) to match get_sector() in maps.py
+        spr = math.ceil(map_def["cols"] / sector_size)
         sec_idx = sector - 1
         sr = sec_idx // spr
         sc = sec_idx % spr

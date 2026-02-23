@@ -604,9 +604,14 @@ function openSonarRespond(activatingTeam) {
   // Show player's own position as hint (they know their truth)
   const posEl = document.getElementById('sonar-respond-position');
   if (posEl && myPosition) {
-    const secVal = mySector || '?';
+    // Always compute sector from current position (matches Python get_sector() logic)
+    // RULEBOOK: TBT has 4 sectors (2×2). sector = (row//SECTOR_SZ)*sectorsPerRow + (col//SECTOR_SZ) + 1
+    const sectorsPerRow = Math.ceil(MAP_COLS / SECTOR_SZ);
+    const sr = Math.floor(myPosition.row / SECTOR_SZ);
+    const sc = Math.floor(myPosition.col / SECTOR_SZ);
+    const secVal = sr * sectorsPerRow + sc + 1;
     posEl.textContent =
-      `Your position: Row ${myPosition.row + 1} | Col ${COL_LABELS[myPosition.col]} (${myPosition.col + 1}) | Sector ${secVal}`;
+      `Your position: Row ${myPosition.row + 1} | Col ${COL_LABELS[myPosition.col]} (${myPosition.col + 1}) | Sector ${secVal} (1–4)`;
   }
   // Reset inputs
   const v1 = document.getElementById('sonar-val1');

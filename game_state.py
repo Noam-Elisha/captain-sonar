@@ -592,11 +592,14 @@ def captain_place_mine(game, team, target_row, target_col):
 
 def captain_detonate_mine(game, team, mine_index):
     """Detonate one of the team's own mines. Returns (ok, error_msg, events).
-    RULEBOOK: can only detonate on own turn; cannot detonate while surfaced."""
+    RULEBOOK: can only detonate on own turn; cannot detonate while surfaced.
+    Like all captain actions, cannot be taken while waiting for a sonar response."""
     if game["phase"] != "playing":
         return False, "Game not active", []
     if current_team(game) != team:
         return False, "Not your turn", []
+    if game["turn_state"]["waiting_for"]:
+        return False, "Cannot detonate mine while waiting for a response", []
     sub = game["submarines"][team]
     # RULEBOOK: "At any time, except while surfaced, the Captain can trigger a mine"
     if sub["surfaced"]:
@@ -620,6 +623,10 @@ def _apply_explosion(game, firing_team, target_row, target_col):
     """
     events = []
     for team, sub in game["submarines"].items():
+        # RULEBOOK edge case: if a prior damage in this same explosion already ended
+        # the game, stop — don't emit a second (contradictory) game_over event.
+        if game["phase"] == "ended":
+            break
         if sub["position"] is None:
             continue
         r, c = sub["position"]
@@ -668,9 +675,10 @@ def captain_use_sonar(game, team):
     game["turn_state"]["system_used"] = True
     game["turn_state"]["waiting_for"] = "sonar_response"
 
+    # NOTE: sonar_announced is broadcast by the server's sonar_activated handler.
+    # Do NOT add a separate sonar_announced event here — that would cause a duplicate.
     events = [
         {"type": "sonar_activated", "team": team},
-        {"type": "sonar_announced", "team": team},
     ]
     game["log"].append({"type": "sonar", "team": team})
     return True, None, events
