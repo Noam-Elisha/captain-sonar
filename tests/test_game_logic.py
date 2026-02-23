@@ -221,10 +221,11 @@ def test_turn_state_reset_after_end_turn():
 # 4. Surface
 # ────────────────────────────────────────────────────────────────────────────
 
-def test_surface_costs_1_hp():
+def test_surface_no_hp_cost():
+    """RULEBOOK (TBT): surfacing does NOT cost HP."""
     game = place_both(fresh_game())
     gs.captain_surface(game, "blue")
-    assert game["submarines"]["blue"]["health"] == 3
+    assert game["submarines"]["blue"]["health"] == 4
 
 
 def test_surface_clears_trail():
@@ -249,7 +250,7 @@ def test_surface_announces_sector():
     assert ok
     surfaced_ev = next(e for e in events if e["type"] == "surfaced")
     assert "sector" in surfaced_ev
-    assert 1 <= surfaced_ev["sector"] <= 9
+    assert 1 <= surfaced_ev["sector"] <= 4  # TBT map alpha has 4 sectors (2×2)
 
 
 def test_dive_clears_surfaced_flag():
@@ -365,8 +366,8 @@ def test_fm_cannot_charge_twice():
 
 def test_fm_cannot_overcharge():
     game = place_both(fresh_game())
-    # Max torpedo = 3; manually set to max
-    game["submarines"]["blue"]["systems"]["torpedo"] = 3
+    # Max torpedo = 6; manually set to max
+    game["submarines"]["blue"]["systems"]["torpedo"] = 6
     gs.captain_move(game, "blue", "east")
     gs.engineer_mark(game, "blue", "east", 0)
     ok, msg, _ = gs.first_mate_charge(game, "blue", "torpedo")
@@ -377,8 +378,8 @@ def test_fm_cannot_overcharge():
 def test_fm_system_ready_at_max():
     """A system is ready when charge == max_charge."""
     game = place_both(fresh_game())
-    # Torpedo needs 3 charges
-    for i in range(3):
+    # Torpedo needs 6 charges
+    for i in range(6):
         if i > 0:
             # Advance to blue's turn via surface hack
             game["turn_state"]["moved"] = False
@@ -389,11 +390,11 @@ def test_fm_system_ready_at_max():
         gs.captain_move(game, "blue", "east")
         gs.engineer_mark(game, "blue", "east", 0)
         gs.first_mate_charge(game, "blue", "torpedo")
-        if i < 2:
+        if i < 5:
             # hack turn back to blue
             game["turn_state"] = gs.make_turn_state()
             game["turn_index"] = 0
-    assert game["submarines"]["blue"]["systems"]["torpedo"] == 3
+    assert game["submarines"]["blue"]["systems"]["torpedo"] == 6
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -402,7 +403,7 @@ def test_fm_system_ready_at_max():
 
 def test_torpedo_direct_hit_2_damage():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(5,6))
-    game["submarines"]["blue"]["systems"]["torpedo"] = 3
+    game["submarines"]["blue"]["systems"]["torpedo"] = 6
     game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, events = gs.captain_fire_torpedo(game, "blue", 5, 6)
     assert ok, msg
@@ -416,7 +417,7 @@ def test_torpedo_adjacent_1_damage():
     # blue at (5,4), red at (5,6), fire at (5,5)
     # Red: Chebyshev dist from (5,5) to (5,6) = 1 → 1 damage
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(5,6))
-    game["submarines"]["blue"]["systems"]["torpedo"] = 3
+    game["submarines"]["blue"]["systems"]["torpedo"] = 6
     game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, events = gs.captain_fire_torpedo(game, "blue", 5, 5)
     assert ok, msg
@@ -426,7 +427,7 @@ def test_torpedo_adjacent_1_damage():
 
 def test_torpedo_out_of_range():
     game = place_both(fresh_game(), blue_pos=(0,0), red_pos=(0,5))
-    game["submarines"]["blue"]["systems"]["torpedo"] = 3
+    game["submarines"]["blue"]["systems"]["torpedo"] = 6
     game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, _ = gs.captain_fire_torpedo(game, "blue", 0, 5)
     assert not ok
@@ -444,7 +445,7 @@ def test_torpedo_not_charged():
 def test_game_over_when_health_zero():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(5,6))
     game["submarines"]["red"]["health"] = 2
-    game["submarines"]["blue"]["systems"]["torpedo"] = 3
+    game["submarines"]["blue"]["systems"]["torpedo"] = 6
     game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, _, events = gs.captain_fire_torpedo(game, "blue", 5, 6)
     assert ok
@@ -460,7 +461,7 @@ def test_game_over_when_health_zero():
 
 def test_mine_place_adjacent():
     game = place_both(fresh_game(), blue_pos=(5,4))
-    game["submarines"]["blue"]["systems"]["mine"] = 3
+    game["submarines"]["blue"]["systems"]["mine"] = 6
     game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, _ = gs.captain_place_mine(game, "blue", 5, 5)
     assert ok, msg
@@ -469,14 +470,14 @@ def test_mine_place_adjacent():
 
 def test_mine_place_non_adjacent_rejected():
     game = place_both(fresh_game(), blue_pos=(5,4))
-    game["submarines"]["blue"]["systems"]["mine"] = 3
+    game["submarines"]["blue"]["systems"]["mine"] = 6
     ok, msg, _ = gs.captain_place_mine(game, "blue", 5, 6)  # 2 cells away
     assert not ok
 
 
 def test_mine_detonate_deals_damage():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(5,6))
-    game["submarines"]["blue"]["systems"]["mine"] = 3
+    game["submarines"]["blue"]["systems"]["mine"] = 6
     game["turn_state"]["moved"] = True   # TBT: systems activate after course announced
     gs.captain_place_mine(game, "blue", 5, 5)
     # Detonate the mine just placed at index 0
@@ -493,7 +494,7 @@ def test_mine_detonate_deals_damage():
 
 def test_stealth_valid():
     game = place_both(fresh_game(), blue_pos=(5,4))
-    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    game["submarines"]["blue"]["systems"]["stealth"] = 4
     ok, msg, events = gs.captain_use_stealth(game, "blue", "east", 2)
     assert ok, msg
     pos = game["submarines"]["blue"]["position"]
@@ -503,7 +504,7 @@ def test_stealth_valid():
 def test_stealth_sets_eng_fm_done():
     """Stealth does NOT auto-set engineer/FM done — they still must act."""
     game = place_both(fresh_game(), blue_pos=(5,4))
-    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    game["submarines"]["blue"]["systems"]["stealth"] = 4
     gs.captain_use_stealth(game, "blue", "east", 1)
     # Rulebook: engineer marks silently in stealth direction; FM charges one system
     assert game["turn_state"]["engineer_done"] == False
@@ -513,7 +514,7 @@ def test_stealth_sets_eng_fm_done():
 def test_stealth_no_direction_set():
     """After stealth, engineer marks stealth dir and FM charges before end turn."""
     game = place_both(fresh_game(), blue_pos=(5,4))
-    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    game["submarines"]["blue"]["systems"]["stealth"] = 4
     gs.captain_use_stealth(game, "blue", "east", 1)
     # Engineer marks in the (private) stealth direction; FM charges a system
     gs.engineer_mark(game, "blue", "east", 0)
@@ -524,7 +525,7 @@ def test_stealth_no_direction_set():
 
 def test_stealth_max_4_moves():
     game = place_both(fresh_game(), blue_pos=(5,4))
-    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    game["submarines"]["blue"]["systems"]["stealth"] = 4
     ok, msg, _ = gs.captain_use_stealth(game, "blue", "east", 5)
     assert not ok
     assert "4" in msg
@@ -533,7 +534,7 @@ def test_stealth_max_4_moves():
 def test_stealth_straight_line_only():
     """Stealth must be a single direction — mixed directions not possible with new API."""
     game = place_both(fresh_game(), blue_pos=(5,4))
-    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    game["submarines"]["blue"]["systems"]["stealth"] = 4
     # Invalid direction string
     ok, msg, _ = gs.captain_use_stealth(game, "blue", "diagonal", 1)
     assert not ok
@@ -543,7 +544,7 @@ def test_stealth_straight_line_only():
 def test_stealth_zero_steps():
     """Stealth with 0 steps is valid (stay in place); eng+FM must still act."""
     game = place_both(fresh_game(), blue_pos=(5,4))
-    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    game["submarines"]["blue"]["systems"]["stealth"] = 4
     ok, msg, events = gs.captain_use_stealth(game, "blue", "east", 0)
     assert ok, msg
     # Position unchanged
@@ -557,7 +558,7 @@ def test_stealth_zero_steps():
 def test_stealth_cannot_revisit():
     """Stealth cannot pass through a previously visited cell."""
     game = place_both(fresh_game(), blue_pos=(5,4))
-    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    game["submarines"]["blue"]["systems"]["stealth"] = 4
     # Move east once normally, then try stealth back west through own trail
     gs.captain_move(game, "blue", "east")
     gs.engineer_mark(game, "blue", "east", 0)
@@ -567,7 +568,7 @@ def test_stealth_cannot_revisit():
     game["active_team"] = "blue"
     game["turn_state"] = gs.make_turn_state()
     # Blue stealth west would pass through (5,4) which is in trail
-    game["submarines"]["blue"]["systems"]["stealth"] = 5
+    game["submarines"]["blue"]["systems"]["stealth"] = 4
     ok, msg, _ = gs.captain_use_stealth(game, "blue", "west", 2)
     assert not ok
     assert "revisit" in msg.lower() or "cannot" in msg.lower()
@@ -579,7 +580,7 @@ def test_stealth_cannot_revisit():
 
 def test_sonar_result_has_correct_format():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(10,10))
-    game["submarines"]["blue"]["systems"]["sonar"] = 3
+    game["submarines"]["blue"]["systems"]["sonar"] = 6
     game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, events = gs.captain_use_sonar(game, "blue")
     assert ok, msg
@@ -589,7 +590,7 @@ def test_sonar_result_has_correct_format():
 
 def test_drone_result_boolean():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(10,10))
-    game["submarines"]["blue"]["systems"]["drone"] = 4
+    game["submarines"]["blue"]["systems"]["drone"] = 6
     game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, events = gs.captain_use_drone(game, "blue", 5)
     assert ok, msg
@@ -622,7 +623,7 @@ if __name__ == "__main__":
         test_can_end_turn_after_surface_immediately,
         test_turn_switches_to_red, test_turn_state_reset_after_end_turn,
         # Surface
-        test_surface_costs_1_hp, test_surface_clears_trail,
+        test_surface_no_hp_cost, test_surface_clears_trail,
         test_surface_announces_sector, test_dive_clears_surfaced_flag,
         # Engineer
         test_engineer_must_mark_correct_direction,

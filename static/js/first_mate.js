@@ -8,11 +8,11 @@
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
 
 const SYS_DEF = {
-  torpedo: {label:'🚀 Torpedo', max:3, color:'red',    desc:'Captain fires — range 4'},
-  mine:    {label:'💣 Mine',    max:3, color:'red',    desc:'Captain places N/S/E/W adjacent (after moving)'},
-  sonar:   {label:'📡 Sonar',  max:3, color:'green',  desc:'YOU activate — ask row/col/sector'},
-  drone:   {label:'🛸 Drone',  max:4, color:'green',  desc:'YOU activate — confirm sector'},
-  stealth: {label:'👻 Stealth',max:5, color:'yellow', desc:'Captain moves silently 0–4 steps'},
+  torpedo: {label:'🚀 Torpedo', max:6, color:'red',    desc:'Captain fires — range 4'},
+  mine:    {label:'💣 Mine',    max:6, color:'red',    desc:'Captain places N/S/E/W adjacent (after moving)'},
+  sonar:   {label:'📡 Sonar',  max:6, color:'green',  desc:'YOU activate — ask row/col/sector'},
+  drone:   {label:'🛸 Drone',  max:6, color:'green',  desc:'YOU activate — confirm sector'},
+  stealth: {label:'👻 Stealth',max:4, color:'yellow', desc:'Captain moves silently 0–4 steps'},
 };
 
 let systems       = {torpedo:{charge:0}, mine:{charge:0}, sonar:{charge:0}, drone:{charge:0}, stealth:{charge:0}};

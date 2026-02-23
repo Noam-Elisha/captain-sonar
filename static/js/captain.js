@@ -36,7 +36,7 @@ let stealthSteps       = 1;
 let hasStealthDir      = false;  // true when stealth was used (need eng+FM to act still)
 
 // System charge tracking (received via systems_update events from server)
-let mySystems = {torpedo:{charge:0,max:3}, mine:{charge:0,max:3}, sonar:{charge:0,max:3}, drone:{charge:0,max:4}, stealth:{charge:0,max:5}};
+let mySystems = {torpedo:{charge:0,max:6}, mine:{charge:0,max:6}, sonar:{charge:0,max:6}, drone:{charge:0,max:6}, stealth:{charge:0,max:4}};
 
 const ISLAND_SET = new Set(ISLANDS.map(([r,c]) => `${r},${c}`));
 
