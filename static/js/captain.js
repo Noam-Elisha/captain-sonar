@@ -24,6 +24,11 @@ let isSurfaced     = false;
 let engineerDone   = false;
 let firstMateDone  = false;
 let lastDirection  = null;
+let mySector       = null;  // current sector (for sonar respond hint)
+
+// Surface bonus state
+let surfaceBonusForTeam  = null;  // which team has bonus turns
+let surfaceBonusTurns    = 0;     // turns remaining for bonus team
 
 let targetMode       = null;   // 'torpedo' | 'mine' | null
 let stealthDirection = null;
@@ -66,14 +71,20 @@ socket.on('moved_self', data => {
 socket.on('turn_start', data => {
   isMyTurn      = (data.team === MY_TEAM);
   hasMoved      = false;
-  isSurfaced    = false;
   engineerDone  = false;
   firstMateDone = false;
   lastDirection = null;
   updateLock();
   updateEndTurnBtn();
-  if (isMyTurn) logEvent('YOUR TURN', 'highlight');
-  else          logEvent(`${data.team} team's turn`);
+  if (isMyTurn) {
+    if (surfaceBonusForTeam === MY_TEAM && surfaceBonusTurns > 0) {
+      logEvent(`YOUR TURN (bonus — ${surfaceBonusTurns} left)`, 'highlight');
+    } else {
+      logEvent('YOUR TURN', 'highlight');
+    }
+  } else {
+    logEvent(`${data.team} team's turn`);
+  }
 });
 
 socket.on('direction_announced', data => {
@@ -81,19 +92,20 @@ socket.on('direction_announced', data => {
 });
 
 socket.on('surface_announced', data => {
-  const msg = data.team === MY_TEAM
-    ? `You surfaced in sector ${data.sector} (−1 HP)`
-    : `Enemy surfaced in sector ${data.sector}!`;
-  logEvent(msg, data.team === MY_TEAM ? 'danger' : 'highlight');
   if (data.team === MY_TEAM) {
-    myHealth   = data.health;
+    // RULEBOOK: no damage from surfacing; enemy gets 3 bonus turns
+    mySector   = data.sector;
     isSurfaced = true;
     hasMoved   = true;
     renderHealth();
     showDiveBtn(true);
     updateLock();
     updateEndTurnBtn();
+    logEvent(`You surfaced in sector ${data.sector} — trail cleared, engineering reset. Enemy gets 3 bonus turns!`, 'warning');
+  } else {
+    logEvent(`Enemy surfaced in sector ${data.sector}! 🎯 We get 3 bonus turns!`, 'highlight');
   }
+  renderSurfaceBonusBar();
 });
 
 socket.on('dive_ack', () => {
@@ -140,10 +152,42 @@ socket.on('stealth_announced', data => {
     logEvent(`👻 Enemy used stealth (${data.steps} step${data.steps!==1?'s':''})`);
 });
 socket.on('sonar_announced', data => {
-  if (data.team !== MY_TEAM) logEvent('Enemy used sonar on us');
+  if (data.team !== MY_TEAM) logEvent('📡 Enemy activated sonar — you must respond!', 'warning');
+  else logEvent('📡 Sonar activated — awaiting enemy captain response');
 });
+
+// RULEBOOK interactive sonar: enemy captain must respond with 1 true, 1 false
+socket.on('sonar_query', data => {
+  logEvent(`📡 Enemy sonar detected! Respond with 1 true and 1 false info.`, 'warning');
+  openSonarRespond(data.activating_team);
+});
+
+// Sonar result (new format: type1/val1/type2/val2)
+socket.on('sonar_result', data => {
+  const t1 = formatSonarLabel(data.type1, data.val1);
+  const t2 = formatSonarLabel(data.type2, data.val2);
+  logEvent(`📡 Sonar result: "${t1}" and "${t2}" (1 is true, 1 is false)`, 'highlight');
+  showToast(`Sonar: ${t1} / ${t2}`);
+});
+
 socket.on('drone_announced', data => {
-  if (data.team !== MY_TEAM) logEvent(`Enemy scanned sector ${data.sector} with drone`);
+  if (data.team !== MY_TEAM) logEvent(`🛸 Enemy scanned sector ${data.sector} with drone`);
+});
+
+// RULEBOOK blackout: no valid moves → auto-surface
+socket.on('blackout_announced', data => {
+  if (data.team === MY_TEAM) {
+    logEvent('⚠ BLACKOUT! No valid moves — automatically surfacing!', 'danger');
+  } else {
+    logEvent(`⚠ Enemy blackout — they had no valid moves and surfaced!`, 'highlight');
+  }
+});
+
+// Circuit cleared (no damage — just inform)
+socket.on('circuit_cleared', data => {
+  if (data.team === MY_TEAM) {
+    logEvent(`🔄 Circuit C${data.circuit} completed — nodes cleared (no damage)`, 'good');
+  }
 });
 
 socket.on('game_over', data => {
@@ -178,6 +222,17 @@ function updateFromState(state) {
   engineerDone  = ts.engineer_done  || false;
   firstMateDone = ts.first_mate_done || false;
   lastDirection = ts.direction      || null;
+
+  // Surface bonus tracking
+  const sb = state.surface_bonus;
+  if (sb) {
+    surfaceBonusForTeam = sb.for_team;
+    surfaceBonusTurns   = sb.turns_remaining;
+  } else {
+    surfaceBonusForTeam = null;
+    surfaceBonusTurns   = 0;
+  }
+  renderSurfaceBonusBar();
 
   if (state.phase === 'placement' && !placementDone) {
     setLock(false);
@@ -372,7 +427,7 @@ function doMove(direction) {
 
 function doSurface() {
   if (!isMyTurn || hasMoved) return;
-  if (!confirm('Surface your submarine? You will take 1 damage and reveal your sector.')) return;
+  if (!confirm('Surface your submarine? Your trail + engineering board will be cleared. You reveal your sector. The enemy team gets 3 free turns!')) return;
   socket.emit('captain_surface', {game_id: GAME_ID, name: MY_NAME});
 }
 
@@ -535,6 +590,98 @@ function showToast(msg, isError) {
   t.textContent = msg;
   t.className   = 'result-toast' + (isError ? ' error' : '');
   setTimeout(() => t.classList.add('hidden'), 4000);
+}
+
+// ── Sonar respond (enemy captain must answer with 1 true + 1 false) ──────────
+function openSonarRespond(activatingTeam) {
+  // Show player's own position as hint (they know their truth)
+  const posEl = document.getElementById('sonar-respond-position');
+  if (posEl && myPosition) {
+    const secVal = mySector || '?';
+    posEl.textContent =
+      `Your position: Row ${myPosition.row + 1} | Col ${COL_LABELS[myPosition.col]} (${myPosition.col + 1}) | Sector ${secVal}`;
+  }
+  // Reset inputs
+  const v1 = document.getElementById('sonar-val1');
+  const v2 = document.getElementById('sonar-val2');
+  if (v1) v1.value = '';
+  if (v2) v2.value = '';
+  updateSonarHint();
+  document.getElementById('sonar-respond-modal').classList.remove('hidden');
+}
+
+function updateSonarHint() {
+  const type1 = document.getElementById('sonar-type1')?.value;
+  const type2 = document.getElementById('sonar-type2')?.value;
+  const hint  = document.getElementById('sonar-respond-hint');
+  const btn   = document.getElementById('btn-sonar-submit');
+  const v1    = parseInt(document.getElementById('sonar-val1')?.value);
+  const v2    = parseInt(document.getElementById('sonar-val2')?.value);
+
+  if (!hint || !btn) return;
+  if (type1 === type2) {
+    hint.textContent = '⚠ Types must be different!';
+    hint.style.color = 'var(--col-red)';
+    btn.disabled = true;
+    return;
+  }
+  if (isNaN(v1) || isNaN(v2)) {
+    hint.textContent = 'Enter both values to continue.';
+    hint.style.color = 'var(--text-muted)';
+    btn.disabled = true;
+    return;
+  }
+  hint.textContent = 'Remember: exactly 1 must be true, 1 must be false.';
+  hint.style.color = 'var(--accent)';
+  btn.disabled = false;
+}
+
+function submitSonarRespond() {
+  const type1 = document.getElementById('sonar-type1')?.value;
+  const type2 = document.getElementById('sonar-type2')?.value;
+  let val1 = parseInt(document.getElementById('sonar-val1')?.value);
+  let val2 = parseInt(document.getElementById('sonar-val2')?.value);
+
+  if (type1 === type2) { showToast('Types must be different!', true); return; }
+  if (isNaN(val1) || isNaN(val2)) { showToast('Enter both values!', true); return; }
+
+  // Convert display values to 0-indexed for row/col
+  if (type1 === 'row' || type1 === 'col') val1 = val1 - 1;
+  if (type2 === 'row' || type2 === 'col') val2 = val2 - 1;
+
+  socket.emit('sonar_respond', {
+    game_id: GAME_ID, name: MY_NAME,
+    type1, val1, type2, val2
+  });
+  document.getElementById('sonar-respond-modal').classList.add('hidden');
+  logEvent(`📡 Sonar response submitted: ${formatSonarLabel(type1, val1)} & ${formatSonarLabel(type2, val2)}`);
+}
+
+function formatSonarLabel(type, val) {
+  if (type === 'row')    return `Row ${val + 1}`;
+  if (type === 'col')    return `Col ${COL_LABELS[val] || (val + 1)}`;
+  if (type === 'sector') return `Sector ${val}`;
+  return `${type}=${val}`;
+}
+
+// ── Surface bonus bar ─────────────────────────────────────────
+function renderSurfaceBonusBar() {
+  // Remove existing bar
+  document.querySelectorAll('.surface-bonus-bar').forEach(e => e.remove());
+  if (!surfaceBonusForTeam || surfaceBonusTurns <= 0) return;
+
+  const isOurs = surfaceBonusForTeam === MY_TEAM;
+  const bar = document.createElement('div');
+  bar.className = 'surface-bonus-bar';
+  bar.textContent = isOurs
+    ? `⏱ Bonus: ${surfaceBonusTurns} extra turn${surfaceBonusTurns !== 1 ? 's' : ''} remaining (enemy surfaced!)`
+    : `⏱ Enemy bonus: ${surfaceBonusTurns} turn${surfaceBonusTurns !== 1 ? 's' : ''} (we surfaced)`;
+
+  // Insert after the turn status row
+  const movePanel = document.getElementById('move-panel');
+  if (movePanel && movePanel.parentNode) {
+    movePanel.parentNode.insertBefore(bar, movePanel);
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────

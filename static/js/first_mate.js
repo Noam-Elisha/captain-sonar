@@ -85,20 +85,51 @@ socket.on('damage', data => {
 });
 
 socket.on('surface_announced', data => {
-  if (data.team === MY_TEAM) { myHealth = data.health; renderHealth(); }
-  logEvent(`${data.team} surfaced in sector ${data.sector}`, data.team === MY_TEAM ? 'danger' : '');
+  // RULEBOOK: no damage from surfacing
+  if (data.team === MY_TEAM) {
+    logEvent(`You surfaced in sector ${data.sector} — trail + engineering cleared. Enemy gets 3 bonus turns!`, 'warning');
+  } else {
+    logEvent(`Enemy surfaced in sector ${data.sector}! We get 3 bonus turns!`, 'highlight');
+  }
 });
 
+socket.on('sonar_announced', data => {
+  if (data.team === MY_TEAM) {
+    logEvent('📡 Sonar activated — waiting for enemy captain to respond…');
+  } else {
+    logEvent('📡 Enemy used sonar on us — our captain must respond');
+  }
+});
+
+// RULEBOOK sonar_result: 2 pieces of info from enemy captain (1 true, 1 false)
 socket.on('sonar_result', data => {
-  const parts = [];
-  if (data.row_match)    parts.push('Row ✓');
-  if (data.col_match)    parts.push('Column ✓');
-  if (data.sector_match) parts.push('Sector ✓');
-  const none = parts.length === 0;
-  showToast(`Sonar: ${none ? 'No match 😔' : parts.join(', ') + ' matched!'}`, none);
-  logEvent(`📡 Sonar result: ${none ? 'no match' : parts.join(', ')}`, 'highlight');
+  const fmtVal = (type, val) => {
+    if (type === 'row') return `Row ${val + 1}`;
+    if (type === 'col') return `Col ${val + 1}`;
+    return `Sector ${val}`;
+  };
+  const info1 = fmtVal(data.type1, data.val1);
+  const info2 = fmtVal(data.type2, data.val2);
+  showToast(`Sonar: "${info1}" and "${info2}" — 1 is true, 1 is false!`);
+  logEvent(`📡 Sonar: enemy said "${info1}" AND "${info2}" (one is true, one is false — deduce!)`, 'highlight');
   systemUsed = true;
   renderSystems();
+});
+
+// RULEBOOK blackout: no valid moves → auto-surface
+socket.on('blackout_announced', data => {
+  if (data.team === MY_TEAM) {
+    logEvent('⚠ BLACKOUT — no valid moves, sub surfaced automatically!', 'danger');
+  } else {
+    logEvent('⚠ Enemy blackout — they surfaced automatically! We get 3 bonus turns!', 'highlight');
+  }
+});
+
+// Circuit cleared event
+socket.on('circuit_cleared', data => {
+  if (data.team === MY_TEAM) {
+    logEvent(`🔄 Circuit C${data.circuit} completed — nodes cleared (no damage)`, 'good');
+  }
 });
 
 socket.on('drone_result', data => {
@@ -219,18 +250,13 @@ function activateSystem(sys) {
   else if (sys === 'drone') openDrone();
 }
 
-// ── Sonar ─────────────────────────────────────────────────────
+// ── Sonar (RULEBOOK: just activate — enemy captain responds) ──────────────────
 function openSonar()  { document.getElementById('sonar-modal').classList.remove('hidden'); }
 function closeSonar() { document.getElementById('sonar-modal').classList.add('hidden');    }
 function submitSonar() {
-  const askRow    = parseInt(document.getElementById('sonar-row').value)    - 1;
-  const askCol    = parseInt(document.getElementById('sonar-col').value)    - 1;
-  const askSector = parseInt(document.getElementById('sonar-sector').value);
   closeSonar();
-  socket.emit('first_mate_sonar', {
-    game_id: GAME_ID, name: MY_NAME,
-    ask_row: askRow, ask_col: askCol, ask_sector: askSector,
-  });
+  // RULEBOOK: no ask params — enemy captain provides 2 pieces of info interactively
+  socket.emit('first_mate_sonar', {game_id: GAME_ID, name: MY_NAME});
 }
 
 // ── Drone ─────────────────────────────────────────────────────

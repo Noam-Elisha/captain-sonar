@@ -171,9 +171,13 @@ def _dispatch_events(game_id, game, events):
                                 {"board": game["submarines"][ev["team"]]["engineering"]})
 
         elif t == "circuit_cleared":
-            _emit_to_team_role(game_id, _current_active(game_id), "engineer",
+            team_c = ev.get("team") or _current_active(game_id)
+            _emit_to_team_role(game_id, team_c, "engineer",
                                 "board_update",
-                                {"board": game["submarines"][_current_active(game_id)]["engineering"]})
+                                {"board": game["submarines"][team_c]["engineering"]})
+            socketio.emit("circuit_cleared",
+                          {"team": team_c, "circuit": ev.get("circuit")},
+                          room=game_id)
 
         elif t == "system_charged":
             _emit_to_team_role(game_id, ev["team"], "first_mate", "systems_update",
@@ -193,20 +197,34 @@ def _dispatch_events(game_id, game, events):
                           {"team": ev["team"], "row": ev["row"], "col": ev["col"]},
                           room=game_id)
 
-        elif t == "sonar_used":
+        elif t == "sonar_announced":
             socketio.emit("sonar_announced", {"team": ev["team"]}, room=game_id)
 
+        elif t == "sonar_activated":
+            # RULEBOOK interactive sonar: emit query to enemy captain, auto-respond if bot
+            activating_team = ev["team"]
+            enemy = gs.other_team(activating_team)
+            socketio.emit("sonar_announced", {"team": activating_team}, room=game_id)
+            # Send query to enemy captain (human or bot)
+            _emit_to_team_role(game_id, enemy, "captain", "sonar_query",
+                                {"activating_team": activating_team})
+            # If enemy captain is a bot, auto-respond immediately
+            enemy_cap = _get_bot_for_role(game_id, enemy, "captain")
+            if enemy_cap and enemy_cap.get("bot"):
+                _bot_sonar_respond(game_id, game, enemy, enemy_cap)
+
         elif t == "sonar_result":
-            # Result goes to first_mate (sonar is operated by first mate)
-            _emit_to_team_role(game_id, ev["target"], "first_mate", "sonar_result",
-                                {"row_match":    ev["row_match"],
-                                 "col_match":    ev["col_match"],
-                                 "sector_match": ev["sector_match"]})
-            _emit_to_team_role(game_id, ev["target"], "first_mate", "systems_update",
-                                {"systems": game["submarines"][ev["target"]]["systems"]})
-            # Update captain bot sonar knowledge (internal bot state only)
-            _update_captain_bot_sonar(game_id, ev["target"],
-                                       ev["row_match"], ev["col_match"], ev["sector_match"])
+            # Result goes to the activating team's captain + first_mate
+            target = ev["target"]
+            result_data = {"type1": ev["type1"], "val1": ev["val1"],
+                           "type2": ev["type2"], "val2": ev["val2"]}
+            _emit_to_team_role(game_id, target, "captain",    "sonar_result", result_data)
+            _emit_to_team_role(game_id, target, "first_mate", "sonar_result", result_data)
+            _emit_to_team_role(game_id, target, "first_mate", "systems_update",
+                                {"systems": game["submarines"][target]["systems"]})
+            # Update captain bot sonar knowledge
+            _update_captain_bot_sonar(game_id, target,
+                                       ev["type1"], ev["val1"], ev["type2"], ev["val2"])
 
         elif t == "drone_used":
             socketio.emit("drone_announced",
@@ -346,11 +364,11 @@ def _update_ro_bot(game_id: str, moving_team: str, event_type: str, **kwargs):
             b.record_drone(kwargs.get("sector", 0))
 
 
-def _update_captain_bot_sonar(game_id, team, row_match, col_match, sector_match):
-    """Update the captain bot's sonar knowledge."""
+def _update_captain_bot_sonar(game_id, team, type1, val1, type2, val2):
+    """Update the captain bot's sonar knowledge (new interactive format)."""
     cap = _get_bot_for_role(game_id, team, "captain")
     if cap and cap.get("bot"):
-        cap["bot"].update_sonar_result(row_match, col_match, sector_match)
+        cap["bot"].update_sonar_result(type1, val1, type2, val2)
 
 
 def _update_captain_bot_drone(game_id, team, sector, in_sector):
@@ -456,6 +474,29 @@ def _bot_playing_step(game_id: str, g: dict, game: dict) -> bool:
 
     team = gs.current_team(game)
     ts   = game["turn_state"]
+    sub  = game["submarines"][team]
+
+    # Step 0 — If surfaced and not yet moved, dive first (RULEBOOK: dive before moving)
+    if sub["surfaced"] and not ts["moved"]:
+        cap = _get_bot_for_role(game_id, team, "captain")
+        if cap is not None:
+            ok, msg = gs.captain_dive(game, team)
+            if ok:
+                socketio.emit("dive_announced", {"team": team}, room=game_id)
+                socketio.emit("bot_chat", {
+                    "team": team, "role": "captain", "name": cap["name"],
+                    "msg": "Diving back down 🤿",
+                }, room=game_id)
+                _broadcast_game_state(game_id)
+                return True
+
+    # Step 0b — If waiting for sonar response and enemy captain is a bot, auto-respond
+    if ts.get("waiting_for") == "sonar_response":
+        responding_team = gs.other_team(team)
+        enemy_cap = _get_bot_for_role(game_id, responding_team, "captain")
+        if enemy_cap and enemy_cap.get("bot"):
+            return _bot_sonar_respond(game_id, game, responding_team, enemy_cap)
+        return False   # waiting for human enemy captain
 
     # Step 1 — Captain must move (or surface/weapon) if not yet moved
     if not ts["moved"]:
@@ -554,14 +595,13 @@ def _bot_captain_action(game_id, g, game, team, cap_player) -> bool:
             return True
 
     elif atype == "sonar":
-        ask_row, ask_col, ask_sector = action[1], action[2], action[3]
-        ok, msg, events = gs.captain_use_sonar(game, team, ask_row, ask_col, ask_sector)
+        ok, msg, events = gs.captain_use_sonar(game, team)
         if ok:
             _dispatch_events(game_id, game, events)
             _broadcast_game_state(game_id)
             socketio.emit("bot_chat", {
                 "team": team, "role": "captain", "name": name,
-                "msg": f"📡 Sonar check — sector {ask_sector}",
+                "msg": "📡 Sonar activated — awaiting enemy response",
             }, room=game_id)
             return True
 
@@ -588,16 +628,19 @@ def _bot_captain_action(game_id, g, game, team, cap_player) -> bool:
     return False
 
 
-def _do_surface_and_dive(game_id, game, team, bot_name, surface_events):
-    """Dispatch surface events then immediately dive (bots don't wait)."""
+def _do_surface(game_id, game, team, bot_name, surface_events):
+    """Dispatch surface events. Bots dive at the start of their next turn.
+    RULEBOOK: enemy gets 3 bonus turns after surfacing — bot must wait."""
     _dispatch_events(game_id, game, surface_events)
-    gs.captain_dive(game, team)
-    socketio.emit("dive_announced", {"team": team}, room=game_id)
     _broadcast_game_state(game_id)
     socketio.emit("bot_chat", {
         "team": team, "role": "captain", "name": bot_name,
-        "msg": "Surfacing to clear trail 🌊 — diving back down",
+        "msg": "Surfacing to clear trail 🌊",
     }, room=game_id)
+
+
+# Keep alias for any remaining references
+_do_surface_and_dive = _do_surface
 
 
 def _bot_engineer_action(game_id, g, game, team, eng_player) -> bool:
@@ -667,6 +710,25 @@ def _bot_end_turn(game_id, g, game, team, cap_player) -> bool:
     if ok:
         _dispatch_events(game_id, game, events)
         return True
+    return False
+
+
+def _bot_sonar_respond(game_id, game, responding_team, cap_player) -> bool:
+    """Bot captain responds to a sonar query with 1 true and 1 false piece of info."""
+    bot = cap_player["bot"]
+    own_sub = game["submarines"][responding_team]
+    type1, val1, type2, val2 = bot.respond_sonar(own_sub, game["map"])
+    ok, msg, events = gs.captain_respond_sonar(game, responding_team, type1, val1, type2, val2)
+    if ok:
+        _dispatch_events(game_id, game, events)
+        _broadcast_game_state(game_id)
+        socketio.emit("bot_chat", {
+            "team": responding_team, "role": "captain", "name": cap_player["name"],
+            "msg": f"📡 Sonar response: {type1}={val1}, {type2}={val2}",
+        }, room=game_id)
+        _schedule_bots(game_id)
+        return True
+    # If validation failed, try a different response (shouldn't happen normally)
     return False
 
 
@@ -1036,6 +1098,7 @@ def on_start_game(data):
 
     g["game"] = gs.make_game("alpha")
     g["game"]["turn_order"] = teams_present
+    g["game"]["active_team"] = teams_present[0]  # explicit active team for surface-bonus tracking
     g["game"]["phase"] = "placement"
 
     socketio.emit("game_started", {
@@ -1214,21 +1277,63 @@ def on_captain_mine_det(data):
 
 @socketio.on("captain_sonar")
 def on_captain_sonar(data):
-    game_id    = (data.get("game_id") or "").upper()
-    name       = data.get("name", "")
-    ask_row    = data.get("ask_row")
-    ask_col    = data.get("ask_col")
-    ask_sector = data.get("ask_sector")
+    """Captain activates sonar (interactive: enemy captain must respond)."""
+    game_id = (data.get("game_id") or "").upper()
+    name    = data.get("name", "")
     p, game = _get_captain(game_id, name)
     if not p:
         return
 
-    ok, msg, events = gs.captain_use_sonar(game, p["team"], ask_row, ask_col, ask_sector)
+    ok, msg, events = gs.captain_use_sonar(game, p["team"])
     if not ok:
         return emit("error", {"msg": msg})
 
     _dispatch_events(game_id, game, events)
     _check_turn_auto_advance(game_id, game)
+
+
+@socketio.on("sonar_respond")
+def on_sonar_respond(data):
+    """Enemy captain responds to a sonar query with 2 pieces of info (1 true, 1 false)."""
+    game_id = (data.get("game_id") or "").upper()
+    name    = data.get("name", "")
+    type1   = data.get("type1", "")
+    val1    = data.get("val1")
+    type2   = data.get("type2", "")
+    val2    = data.get("val2")
+
+    g = games.get(game_id)
+    if not g or g["game"] is None:
+        return emit("error", {"msg": "Game not found"})
+
+    p = _get_player(game_id, name)
+    if not p or p["role"] != "captain":
+        return emit("error", {"msg": "Only the enemy captain can respond to sonar"})
+
+    # Validate this captain is on the responding (enemy) team
+    activating_team = gs.current_team(g["game"])
+    if p["team"] == activating_team:
+        return emit("error", {"msg": "The activating team's captain cannot respond to their own sonar"})
+
+    # Convert val1/val2 to int if they're numeric
+    try:
+        if type1 == "row" or type1 == "col":
+            val1 = int(val1)
+        elif type1 == "sector":
+            val1 = int(val1)
+        if type2 == "row" or type2 == "col":
+            val2 = int(val2)
+        elif type2 == "sector":
+            val2 = int(val2)
+    except (TypeError, ValueError):
+        return emit("error", {"msg": "Invalid value types for sonar response"})
+
+    ok, msg, events = gs.captain_respond_sonar(g["game"], p["team"], type1, val1, type2, val2)
+    if not ok:
+        return emit("error", {"msg": msg})
+
+    _dispatch_events(game_id, g["game"], events)
+    _check_turn_auto_advance(game_id, g["game"])
 
 
 @socketio.on("captain_drone")
@@ -1336,12 +1441,9 @@ def on_first_mate_charge(data):
 
 @socketio.on("first_mate_sonar")
 def on_first_mate_sonar(data):
-    """First mate activates sonar (green system — operated by FM, not captain)."""
-    game_id    = (data.get("game_id") or "").upper()
-    name       = data.get("name", "")
-    ask_row    = data.get("ask_row")
-    ask_col    = data.get("ask_col")
-    ask_sector = data.get("ask_sector")
+    """First mate activates sonar (interactive: enemy captain must respond)."""
+    game_id = (data.get("game_id") or "").upper()
+    name    = data.get("name", "")
 
     g = games.get(game_id)
     if not g or g["game"] is None:
@@ -1353,7 +1455,7 @@ def on_first_mate_sonar(data):
     if g["game"]["phase"] != "playing":
         return emit("error", {"msg": "Game is not in playing phase"})
 
-    ok, msg, events = gs.captain_use_sonar(g["game"], p["team"], ask_row, ask_col, ask_sector)
+    ok, msg, events = gs.captain_use_sonar(g["game"], p["team"])
     if not ok:
         return emit("error", {"msg": msg})
 
@@ -1401,7 +1503,22 @@ def on_ro_canvas_stroke(data):
 # ── Auto-advance helper ───────────────────────────────────────────────────────
 
 def _check_turn_auto_advance(game_id, game):
-    """Broadcast state and trigger bot actions if needed."""
+    """Broadcast state and trigger bot actions if needed.
+    Also detects BLACKOUT (no valid moves) and auto-surfaces the active submarine."""
+    # RULEBOOK blackout: if captain has no valid moves at start of their turn, must surface
+    if (game["phase"] == "playing"
+            and not game["turn_state"]["moved"]
+            and not game["turn_state"]["waiting_for"]):
+        team = gs.current_team(game)
+        sub = game["submarines"][team]
+        if not sub["surfaced"] and not gs.has_valid_move(game, team):
+            # Force surface (blackout)
+            ok, msg, events = gs.captain_surface(game, team)
+            if ok:
+                socketio.emit("blackout_announced",
+                              {"team": team, "msg": "No valid moves — surfacing!"}, room=game_id)
+                _dispatch_events(game_id, game, events)
+
     _broadcast_game_state(game_id)
     _schedule_bots(game_id)
 

@@ -112,6 +112,24 @@
 .stealth-btn { border-color: rgba(234,179,8,.3); }
 .stealth-btn:hover { border-color: #fbbf24; background: #1a1500; color: #fbbf24; }
 
+/* Sonar respond modal inputs */
+.sonar-select, .sonar-input {
+  width: 100%; padding: .4rem .6rem; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg-input); color: var(--text);
+  font-size: .85rem;
+}
+.sonar-select:focus, .sonar-input:focus {
+  outline: none; border-color: var(--accent);
+}
+
+/* Surface bonus indicator */
+.surface-bonus-bar {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .35rem .7rem; background: rgba(249,115,22,.1);
+  border: 1px solid rgba(249,115,22,.35); border-radius: 6px;
+  font-size: .78rem; color: #f97316; margin-top: .3rem;
+}
+
 /* Section hint */
 .section-hint {
   font-size: .62rem; color: var(--text-muted); font-weight: 400;

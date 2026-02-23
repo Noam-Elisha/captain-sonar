@@ -13,17 +13,15 @@
 </div>
 <div id="result-toast" class="result-toast hidden"></div>
 
-<!-- Sonar modal -->
+<!-- Sonar modal (RULEBOOK: FM activates, then enemy captain must respond with 1 true + 1 false) -->
 <div id="sonar-modal" class="modal hidden">
   <div class="modal-card">
     <h3>📡 Sonar Ping</h3>
-    <p>Ask about one Row, one Column, and one Sector:</p>
-    <label>Row (1–{{ map_rows }})<input type="number" id="sonar-row" min="1" max="{{ map_rows }}" value="1"/></label>
-    <label>Column (1–{{ map_cols }})<input type="number" id="sonar-col" min="1" max="{{ map_cols }}" value="1"/></label>
-    <label>Sector (1–9)<input type="number" id="sonar-sector" min="1" max="9" value="1"/></label>
+    <p>Activate sonar — the <strong>enemy captain</strong> will be asked to reveal 2 pieces of info (1 true, 1 false, different types).</p>
+    <p style="font-size:.8rem;color:var(--text-muted);">You will receive their stated row/column/sector — use your radio operator map to deduce which is true!</p>
     <div class="modal-btns">
       <button class="btn-cancel"  onclick="closeSonar()">Cancel</button>
-      <button class="btn-confirm" onclick="submitSonar()">Ping!</button>
+      <button class="btn-confirm" onclick="submitSonar()">📡 Activate Sonar!</button>
     </div>
   </div>
 </div>

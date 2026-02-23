@@ -23,7 +23,7 @@ DIRECTIONS = ["north", "south", "east", "west"]
 
 # ── Utility helpers ────────────────────────────────────────────────────────────
 
-def _get_valid_moves(row, col, trail_set, island_set, rows, cols):
+def _get_valid_moves(row, col, trail_set, island_set, rows, cols, mine_set=None):
     """Return list of (direction, new_row, new_col) that are legal moves."""
     valid = []
     for d in DIRECTIONS:
@@ -35,6 +35,8 @@ def _get_valid_moves(row, col, trail_set, island_set, rows, cols):
             continue
         if (nr, nc) in trail_set:
             continue
+        if mine_set and (nr, nc) in mine_set:
+            continue   # RULEBOOK: cannot move into own mine
         valid.append((d, nr, nc))
     return valid
 
@@ -64,11 +66,53 @@ class CaptainBot:
 
     # ── Knowledge updates (called by server after events) ──────────────────────
 
-    def update_sonar_result(self, row_match: bool, col_match: bool, sector_match: bool):
-        self.sonar_history.append((row_match, col_match, sector_match))
-        # If sector matched, update known sector
-        if sector_match and self.sonar_history:
-            pass  # sector info comes through drone; sonar needs more inference
+    def update_sonar_result(self, type1: str, val1, type2: str, val2):
+        """Store a sonar result (new format: 2 pieces of info from enemy captain, 1 true 1 false)."""
+        self.sonar_history.append((type1, val1, type2, val2))
+
+    def respond_sonar(self, own_sub: dict, map_def: dict) -> tuple:
+        """
+        Generate a sonar response (1 true, 1 false, different types).
+        Returns (type1, val1, type2, val2).
+        """
+        er, ec = own_sub["position"]
+        actual_sector = get_sector(er, ec, map_def["sector_size"], map_def["cols"])
+
+        type_options = ["row", "col", "sector"]
+        random.shuffle(type_options)
+        type1, type2 = type_options[0], type_options[1]
+
+        rows = map_def["rows"]
+        cols = map_def["cols"]
+        total_sectors = (rows // map_def["sector_size"]) * (cols // map_def["sector_size"])
+
+        def true_val(t):
+            if t == "row":    return er
+            if t == "col":    return ec
+            if t == "sector": return actual_sector
+            return 0
+
+        def false_val(t):
+            if t == "row":
+                options = [r for r in range(rows) if r != er]
+                return random.choice(options) if options else (er + 1) % rows
+            if t == "col":
+                options = [c for c in range(cols) if c != ec]
+                return random.choice(options) if options else (ec + 1) % cols
+            if t == "sector":
+                options = [s for s in range(1, total_sectors + 1) if s != actual_sector]
+                return random.choice(options) if options else 1
+            return 0
+
+        # 50/50: type1 is true, type2 is false OR vice versa
+        if random.random() < 0.5:
+            val1 = true_val(type1)
+            val2 = false_val(type2)
+        else:
+            val1 = false_val(type1)
+            val2 = true_val(type2)
+
+        return (type1, val1, type2, val2)
 
     def update_drone_result(self, sector: int, in_sector: bool):
         self.drone_history.append((sector, in_sector))
@@ -128,6 +172,7 @@ class CaptainBot:
 
         r, c = pos
         trail_set = set(tuple(p) for p in sub.get("trail", []))
+        mine_set  = set(tuple(m) for m in sub.get("mines", []))
         systems = sub.get("systems", {})
         rows = map_def["rows"]
         cols = map_def["cols"]
@@ -156,25 +201,24 @@ class CaptainBot:
             sector = random.randint(1, 9)
             return ("drone", sector)
 
-        # Use sonar if charged
+        # Use sonar if charged (interactive flow: no params needed at activation)
         sonar_charge = systems.get("sonar", 0)
         if isinstance(sonar_charge, dict):
             sonar_charge = sonar_charge.get("charge", 0)
         if sonar_charge >= SYSTEM_MAX_CHARGE["sonar"]:
-            sector = self.known_enemy_sector if self.known_enemy_sector else random.randint(1, 9)
-            return ("sonar", None, None, sector)
+            return ("sonar",)
 
         # ── Movement ───────────────────────────────────────────────────────────
 
-        valid = _get_valid_moves(r, c, trail_set, island_set, rows, cols)
+        valid = _get_valid_moves(r, c, trail_set, island_set, rows, cols, mine_set)
 
         if not valid:
-            # Completely trapped
+            # Completely trapped (blackout — must surface per rulebook)
             stealth_charge = systems.get("stealth", 0)
             if isinstance(stealth_charge, dict):
                 stealth_charge = stealth_charge.get("charge", 0)
             if stealth_charge >= SYSTEM_MAX_CHARGE["stealth"]:
-                result = self._plan_stealth(r, c, trail_set, island_set, rows, cols, 4)
+                result = self._plan_stealth(r, c, trail_set, island_set, rows, cols, 4, mine_set)
                 if result:
                     direction, steps = result
                     return ("stealth", direction, steps)
@@ -185,7 +229,7 @@ class CaptainBot:
         if isinstance(stealth_charge, dict):
             stealth_charge = stealth_charge.get("charge", 0)
         if stealth_charge >= SYSTEM_MAX_CHARGE["stealth"] and len(valid) <= 2:
-            result = self._plan_stealth(r, c, trail_set, island_set, rows, cols, 4)
+            result = self._plan_stealth(r, c, trail_set, island_set, rows, cols, 4, mine_set)
             if result and result[1] >= 2:
                 direction, steps = result
                 return ("stealth", direction, steps)
@@ -224,7 +268,7 @@ class CaptainBot:
         candidates.sort()
         return (candidates[0][1], candidates[0][2])
 
-    def _plan_stealth(self, r, c, trail_set, island_set, rows, cols, max_steps=4):
+    def _plan_stealth(self, r, c, trail_set, island_set, rows, cols, max_steps=4, mine_set=None):
         """
         Plan a straight-line stealth move (Silence rule: ONE direction only).
         Returns (direction, steps) tuple, or None if no valid move exists.
@@ -248,6 +292,8 @@ class CaptainBot:
                     break
                 if (nr, nc) in visited:
                     break
+                if mine_set and (nr, nc) in mine_set:
+                    break   # cannot move into own mine
                 visited.add((nr, nc))
                 cur_r, cur_c = nr, nc
                 steps += 1

@@ -21,8 +21,8 @@ Engineering board layout (Map Alpha standard):
     C3 (pink):   N[2], S[2], E[2], W[2]  – stealth nodes
 
   When all 4 nodes of a circuit are marked → they self-clear (no damage).
-  When all 4 direction nodes in one panel are marked → 1 damage + clear that panel.
-  When all radiation nodes (4 total, one per direction) are marked → 1 damage + clear radiation.
+  When all 6 nodes of one direction section are marked → 1 damage + clear ENTIRE board.
+  When all 4 radiation nodes are marked → 1 damage + clear ENTIRE board.
 
 System charge costs (First Mate charges per captain move):
   torpedo : 3   mine : 3   sonar : 3   drone : 4   stealth : 5
@@ -30,10 +30,19 @@ System charge costs (First Mate charges per captain move):
 Torpedo range: Manhattan distance ≤ 4.
   Direct hit (same cell): 2 damage.   Adjacent (distance 1): 1 damage.
 
-Surface: clear trail, take 1 damage, announce sector.
-Silence: move up to 4 spaces in ONE straight line (same direction only).
+Surface: clear trail + entire engineering board, announce sector.
+  NO inherent damage from surfacing.  Enemy team gets 3 free turns.
+  Captain must DIVE before moving again.
+
+Silence (Stealth): move 0-4 spaces in ONE straight line silently.
 Systems: blocked if any node of corresponding color is marked in engineer board.
          A team cannot activate two systems in the same turn.
+
+Blackout: if captain has no valid moves at start of turn, must surface immediately.
+
+Sonar (interactive): activating FM/captain triggers sonar_query to enemy captain.
+  Enemy captain must respond with 2 pieces of info (1 true, 1 false, different types).
+  The activating team receives the enemy captain's stated info (not server-computed truth).
 """
 
 from maps import get_sector, MAPS
@@ -71,7 +80,7 @@ ENGINEERING_LAYOUT = {
         {"color": "yellow",    "circuit": None}, # 4  stealth (extra)
         {"color": "radiation", "circuit": None}, # 5  reactor
     ],
-    "east": [
+    "east":  [
         {"color": "red",       "circuit": 1},   # 0  mine/torpedo  C1
         {"color": "green",     "circuit": 2},   # 1  sonar/drone   C2
         {"color": "yellow",    "circuit": 3},   # 2  stealth        C3
@@ -127,10 +136,22 @@ def make_engineering_board():
     return board
 
 
+def clear_engineering_board(board):
+    """Clear ALL marked nodes on the entire engineering board."""
+    for dir_nodes in board.values():
+        for node in dir_nodes:
+            node["marked"] = False
+
+
 def engineer_mark_node(board, direction, index):
     """
     Mark node at (direction, index).
     Returns a list of events: [{"type": ..., ...}]
+
+    RULEBOOK:
+    - Circuit completed (C1/C2/C3) → clear those 4 nodes only, no damage.
+    - Direction overload (all 6 nodes in one section) → 1 damage + clear ENTIRE board.
+    - Radiation overload (all 4 radiation nodes) → 1 damage + clear ENTIRE board.
     """
     if board[direction][index]["marked"]:
         return [{"type": "error", "msg": "Node already marked"}]
@@ -138,7 +159,7 @@ def engineer_mark_node(board, direction, index):
     board[direction][index]["marked"] = True
     events = []
 
-    # Check circuits first (circuit completion clears nodes, no damage)
+    # Check circuits first (circuit completion clears only circuit nodes, no damage)
     circuit_id = board[direction][index]["circuit"]
     if circuit_id is not None:
         circuit_nodes = CIRCUITS[circuit_id]
@@ -147,19 +168,20 @@ def engineer_mark_node(board, direction, index):
                 board[d][i]["marked"] = False
             events.append({"type": "circuit_cleared", "circuit": circuit_id})
 
-    # Check radiation (after circuit processing)
+    # Check radiation (after circuit processing, so cleared circuit nodes don't count)
     total_radiation = sum(
         1 for d, i in RADIATION_NODES if board[d][i]["marked"]
     )
     if total_radiation >= len(RADIATION_NODES):
-        for d, i in RADIATION_NODES:
-            board[d][i]["marked"] = False
+        # RULEBOOK: clear ENTIRE board on radiation damage
+        clear_engineering_board(board)
         events.append({"type": "radiation_damage", "damage": 1})
+        return events   # direction overload can't fire after full clear
 
-    # Check direction overload (all 6 nodes filled → damage + clear)
+    # Check direction overload (all 6 nodes in current direction filled → damage + clear ALL)
     if all(n["marked"] for n in board[direction]):
-        for n in board[direction]:
-            n["marked"] = False
+        # RULEBOOK: clear ENTIRE board on direction damage
+        clear_engineering_board(board)
         events.append({"type": "direction_damage", "direction": direction, "damage": 1})
 
     return events
@@ -209,6 +231,8 @@ def make_game(map_key="alpha"):
         "phase":      "placement",   # placement | playing | ended
         "turn_index": 0,
         "turn_order": ["blue", "red"],
+        "active_team": "blue",       # explicit active team (handles surface bonus turns)
+        "surface_bonus": None,        # None | {"for_team": team, "turns_remaining": int}
         "submarines": {
             "blue": make_submarine("blue"),
             "red":  make_submarine("red"),
@@ -234,7 +258,12 @@ def make_turn_state():
 
 
 def current_team(game):
-    return game["turn_order"][game["turn_index"] % 2]
+    """Return the team whose turn it currently is."""
+    return game["active_team"]
+
+
+def other_team(team):
+    return "red" if team == "blue" else "blue"
 
 
 def is_valid_position(game, row, col):
@@ -300,6 +329,10 @@ def captain_move(game, team, direction):
     if [nr, nc] in sub["trail"]:
         return False, "Cannot revisit a cell (you've been there before)", []
 
+    # RULEBOOK: Cannot move into own mine
+    if [nr, nc] in sub["mines"]:
+        return False, "Cannot move into own mine", []
+
     # Move
     sub["position"] = [nr, nc]
     sub["trail"].append([nr, nc])
@@ -312,7 +345,15 @@ def captain_move(game, team, direction):
 
 
 def captain_surface(game, team):
-    """Surface the submarine. Returns (ok, error_msg, events)."""
+    """
+    Surface the submarine. Returns (ok, error_msg, events).
+
+    RULEBOOK:
+    - NO inherent damage from surfacing.
+    - Clears trail (keeps current position) + clears ENTIRE engineering board.
+    - Announces sector to all.
+    - Enemy team gets 3 free turns (surface bonus).
+    """
     if game["phase"] != "playing":
         return False, "Game not active", []
     if current_team(game) != team:
@@ -326,9 +367,16 @@ def captain_surface(game, team):
     r, c = sub["position"]
     sector = get_sector(r, c, game["map"]["sector_size"], game["map"]["cols"])
 
-    sub["health"] -= 1
+    # No damage from surfacing (rulebook)
     sub["trail"] = [[r, c]]   # clear trail (keep current position)
     sub["surfaced"] = True
+
+    # RULEBOOK: clear entire engineering board when surfacing
+    clear_engineering_board(sub["engineering"])
+
+    # RULEBOOK: enemy team gets 3 bonus turns after surfacing
+    enemy = other_team(team)
+    game["surface_bonus"] = {"for_team": enemy, "turns_remaining": 3}
 
     events = [{"type": "surfaced", "team": team, "sector": sector, "health": sub["health"]}]
     game["log"].append({"type": "surface", "team": team, "sector": sector})
@@ -338,15 +386,13 @@ def captain_surface(game, team):
     game["turn_state"]["engineer_done"] = True   # no engineering needed when surfacing
     game["turn_state"]["first_mate_done"] = True  # no charging when surfacing
 
-    result = _check_game_over(game)
-    if result:
-        events.append(result)
-
     return True, None, events
 
 
 def captain_dive(game, team):
-    """Dive after surfacing."""
+    """Dive after surfacing. Must be this team's turn."""
+    if current_team(game) != team:
+        return False, "Not your turn"
     sub = game["submarines"][team]
     if not sub["surfaced"]:
         return False, "Not surfaced"
@@ -386,7 +432,8 @@ def engineer_mark(game, team, direction, index):
             sub["health"] -= dmg
             total_damage += dmg
             out_events.append({"type": "engineering_damage", "team": team,
-                                "cause": ev["type"], "damage": dmg, "health": sub["health"]})
+                                "cause": ev["type"], "damage": dmg, "health": sub["health"],
+                                "direction": ev.get("direction")})
         else:
             out_events.append({"type": "circuit_cleared", "team": team, "circuit": ev.get("circuit")})
 
@@ -445,14 +492,15 @@ def has_valid_move(game, team):
     for direction in ("north", "south", "east", "west"):
         dr, dc = direction_delta(direction)
         nr, nc = r + dr, c + dc
-        if is_valid_position(game, nr, nc) and [nr, nc] not in sub["trail"]:
+        if is_valid_position(game, nr, nc) and [nr, nc] not in sub["trail"] and [nr, nc] not in sub["mines"]:
             return True
     return False
 
 
 def captain_fire_torpedo(game, team, target_row, target_col):
     """Fire a torpedo. Returns (ok, error_msg, events).
-    If system unavailable: takes 1 damage instead of firing."""
+    If system unavailable: takes 1 damage instead of firing.
+    RULEBOOK: torpedo destroys (without exploding) any mine at the impact cell."""
     if current_team(game) != team:
         return False, "Not your turn", []
     if game["phase"] != "playing":
@@ -481,6 +529,15 @@ def captain_fire_torpedo(game, team, target_row, target_col):
 
     _use_system(sub, "torpedo")
     game["turn_state"]["system_used"] = True
+
+    # RULEBOOK: torpedo destroys (without exploding) any mine at the impact cell
+    for t, s in game["submarines"].items():
+        before = len(s["mines"])
+        s["mines"] = [m for m in s["mines"] if m != [target_row, target_col]]
+        if len(s["mines"]) < before:
+            game["log"].append({"type": "mine_destroyed_by_torpedo",
+                                 "team": t, "row": target_row, "col": target_col})
+
     events = [{"type": "torpedo_fired", "team": team, "row": target_row, "col": target_col}]
     events += _apply_explosion(game, team, target_row, target_col)
     game["log"].append({"type": "torpedo", "team": team, "row": target_row, "col": target_col})
@@ -527,9 +584,12 @@ def captain_place_mine(game, team, target_row, target_col):
 
 
 def captain_detonate_mine(game, team, mine_index):
-    """Detonate one of the team's own mines. Returns (ok, error_msg, events)."""
+    """Detonate one of the team's own mines. Returns (ok, error_msg, events).
+    RULEBOOK: can only detonate on own turn."""
     if game["phase"] != "playing":
         return False, "Game not active", []
+    if current_team(game) != team:
+        return False, "Not your turn", []
     sub = game["submarines"][team]
     if mine_index < 0 or mine_index >= len(sub["mines"]):
         return False, "Invalid mine index", []
@@ -565,46 +625,87 @@ def _apply_explosion(game, firing_team, target_row, target_col):
     return events
 
 
-def captain_use_sonar(game, team, ask_row, ask_col, ask_sector):
+# ── Sonar (interactive) ────────────────────────────────────────────────────────
+
+def captain_use_sonar(game, team):
     """
-    Use sonar: ask row, column, sector about the enemy.
-    Server determines truths and returns them privately to querying captain.
+    Activate sonar. Sets waiting_for='sonar_response' so enemy captain must respond.
+    RULEBOOK: enemy captain gives 2 pieces of info (1 true, 1 false, different types).
+    The activating team sees the enemy's stated info (NOT server-computed truth).
     Returns (ok, error_msg, events)
     """
     if current_team(game) != team:
         return False, "Not your turn", []
     if game["turn_state"]["system_used"]:
-        return False, "Already used a system this turn – move first", []
+        return False, "Already used a system this turn", []
     sub = game["submarines"][team]
     if not _check_charge(sub, "sonar"):
         return False, "Sonar not charged", []
     if is_system_blocked(sub["engineering"], "sonar"):
         return False, "Sonar blocked by engineer breakdown (green nodes marked)", []
 
-    enemy_team = "red" if team == "blue" else "blue"
-    enemy_sub = game["submarines"][enemy_team]
-    er, ec = enemy_sub["position"]
-    map_def = game["map"]
-    sector_size = map_def["sector_size"]
-    actual_sector = get_sector(er, ec, sector_size, map_def["cols"])
-
-    # Verify ask values are reasonable
-    row_match    = (er == ask_row)
-    col_match    = (ec == ask_col)
-    sector_match = (actual_sector == ask_sector)
-
     _use_system(sub, "sonar")
     game["turn_state"]["system_used"] = True
+    game["turn_state"]["waiting_for"] = "sonar_response"
+
     events = [
-        {"type": "sonar_used", "team": team, "ask_row": ask_row,
-         "ask_col": ask_col, "ask_sector": ask_sector},
-        # Private result sent only to querying captain
-        {"type": "sonar_result", "target": team,
-         "row_match": row_match, "col_match": col_match, "sector_match": sector_match},
-        # Public event (enemy knows sonar was used)
+        {"type": "sonar_activated", "team": team},
         {"type": "sonar_announced", "team": team},
     ]
     game["log"].append({"type": "sonar", "team": team})
+    return True, None, events
+
+
+def captain_respond_sonar(game, responding_team, type1, val1, type2, val2):
+    """
+    Enemy captain responds to sonar query.
+    RULEBOOK: must give 2 different types (row/col/sector), exactly 1 true and 1 false.
+    responding_team: the team that is responding (NOT the activating team).
+    Returns (ok, error_msg, events)
+    """
+    activating_team = other_team(responding_team)
+
+    if game["turn_state"]["waiting_for"] != "sonar_response":
+        return False, "No sonar query is pending", []
+    if current_team(game) != activating_team:
+        return False, "Sonar query is not active", []
+
+    # Validate types
+    valid_types = {"row", "col", "sector"}
+    if type1 not in valid_types or type2 not in valid_types:
+        return False, "Invalid type (must be 'row', 'col', or 'sector')", []
+    if type1 == type2:
+        return False, "Both pieces of info must be different types (e.g. one row and one sector)", []
+
+    # Determine truth using responding team's actual position
+    enemy_sub = game["submarines"][responding_team]
+    er, ec = enemy_sub["position"]
+    map_def = game["map"]
+    actual_sector = get_sector(er, ec, map_def["sector_size"], map_def["cols"])
+
+    def is_true(t, v):
+        if t == "row":    return er == v
+        if t == "col":    return ec == v
+        if t == "sector": return actual_sector == v
+        return False
+
+    truth1 = is_true(type1, val1)
+    truth2 = is_true(type2, val2)
+
+    # Exactly 1 must be true, 1 must be false
+    if truth1 and truth2:
+        return False, "Both pieces of information are true — exactly 1 must be true and 1 false", []
+    if not truth1 and not truth2:
+        return False, "Both pieces of information are false — exactly 1 must be true and 1 false", []
+
+    game["turn_state"]["waiting_for"] = None
+
+    events = [
+        {"type": "sonar_result",
+         "target": activating_team,
+         "type1": type1, "val1": val1,
+         "type2": type2, "val2": val2},
+    ]
     return True, None, events
 
 
@@ -623,7 +724,7 @@ def captain_use_drone(game, team, ask_sector):
     if is_system_blocked(sub["engineering"], "drone"):
         return False, "Drone blocked by engineer breakdown (green nodes marked)", []
 
-    enemy_team = "red" if team == "blue" else "blue"
+    enemy_team = other_team(team)
     enemy_sub = game["submarines"][enemy_team]
     er, ec = enemy_sub["position"]
     map_def = game["map"]
@@ -636,7 +737,7 @@ def captain_use_drone(game, team, ask_sector):
     game["turn_state"]["system_used"] = True
     events = [
         {"type": "drone_used", "team": team, "ask_sector": ask_sector},
-        {"type": "drone_result", "target": team, "in_sector": in_sector},
+        {"type": "drone_result", "target": team, "in_sector": in_sector, "ask_sector": ask_sector},
         {"type": "drone_announced", "team": team, "sector": ask_sector},
     ]
     game["log"].append({"type": "drone", "team": team})
@@ -683,6 +784,7 @@ def captain_use_stealth(game, team, direction, steps):
     # Validate straight-line path
     r, c = sub["position"]
     visited = set(tuple(pos) for pos in sub["trail"])
+    mines_set = set(tuple(m) for m in sub["mines"])
     path = []
     dr, dc = direction_delta(direction)
     for _ in range(steps):
@@ -691,6 +793,8 @@ def captain_use_stealth(game, team, direction, steps):
             return False, "Invalid move during stealth (boundary or island)", []
         if (r, c) in visited:
             return False, "Cannot revisit a cell during stealth", []
+        if (r, c) in mines_set:
+            return False, "Cannot move into own mine during stealth", []
         visited.add((r, c))
         path.append([r, c])
 
@@ -737,14 +841,39 @@ def can_end_turn(game, team):
 
 
 def end_turn(game, team):
-    """End the active team's turn. Returns (ok, error_msg, events)."""
+    """
+    End the active team's turn. Returns (ok, error_msg, events).
+
+    RULEBOOK surface bonus: when a team surfaces, the other team gets 3 free turns.
+    surface_bonus = {"for_team": X, "turns_remaining": N}
+    - While turns_remaining > 0 and active_team == bonus team: stay on bonus team.
+    - When bonus exhausted: switch to the other (surfaced) team.
+    """
     ok, msg = can_end_turn(game, team)
     if not ok:
         return False, msg, []
 
     game["turn_index"] += 1
+
+    sb = game.get("surface_bonus")
+    if sb is not None:
+        if sb["for_team"] == team:
+            # Bonus team just played one of their bonus turns
+            sb["turns_remaining"] -= 1
+            if sb["turns_remaining"] <= 0:
+                # Bonus exhausted — switch back to the surfaced team
+                game["surface_bonus"] = None
+                game["active_team"] = other_team(team)
+            # else: bonus team continues (active_team stays the same)
+        else:
+            # The surfaced team ended their (surface) turn — give bonus to bonus team
+            game["active_team"] = sb["for_team"]
+    else:
+        # Normal turn switch
+        game["active_team"] = other_team(team)
+
     game["turn_state"] = make_turn_state()
-    next_t = current_team(game)
+    next_t = game["active_team"]
     events = [{"type": "turn_end", "team": team},
               {"type": "turn_start", "team": next_t}]
     return True, None, events
@@ -800,13 +929,15 @@ def serialize_game(game, perspective_team=None):
         subs[team] = s
 
     return {
-        "phase":      game["phase"],
-        "turn_index": game["turn_index"],
-        "current_team": current_team(game) if game["phase"] == "playing" else None,
-        "turn_order": game["turn_order"],
-        "turn_state": game["turn_state"],
-        "submarines": subs,
-        "winner":     game["winner"],
+        "phase":         game["phase"],
+        "turn_index":    game["turn_index"],
+        "current_team":  current_team(game) if game["phase"] == "playing" else None,
+        "active_team":   game.get("active_team"),
+        "surface_bonus": game.get("surface_bonus"),
+        "turn_order":    game["turn_order"],
+        "turn_state":    game["turn_state"],
+        "submarines":    subs,
+        "winner":        game["winner"],
         "map": {
             "rows":        map_def["rows"],
             "cols":        map_def["cols"],
