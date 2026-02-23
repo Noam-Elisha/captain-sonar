@@ -33,10 +33,77 @@
       Waiting for captain to move…
     </div>
 
-    <!-- Engineering board: 4 direction columns -->
+    <!-- Engineering board: 2×2 section layout (W/N top row, S/E bottom row) -->
     <div class="eng-board" id="eng-board">
-      <!-- Rendered by JS -->
-    </div>
+
+      <!-- SVG overlay for inter-section circuit loops -->
+      <svg class="eng-circuit-svg" id="eng-circuit-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+
+      <!-- ── WEST section (top-left) ────────────────────────── -->
+      <div class="eng-section west-section" id="section-west">
+        <div class="section-dir-label">← WEST</div>
+        <div class="section-main-nodes">
+          <div class="eng-node red circuit-1"   id="node-west-0" data-dir="west" data-idx="0"><span class="circuit-badge c1">C1</span></div>
+          <div class="eng-node green circuit-2"  id="node-west-1" data-dir="west" data-idx="1"><span class="circuit-badge c2">C2</span></div>
+          <div class="eng-node yellow circuit-3" id="node-west-2" data-dir="west" data-idx="2"><span class="circuit-badge c3">C3</span></div>
+        </div>
+        <div class="section-divider"><span>⚛</span></div>
+        <div class="section-extra-nodes">
+          <div class="eng-node yellow no-circuit"    id="node-west-3" data-dir="west" data-idx="3"></div>
+          <div class="eng-node red no-circuit"       id="node-west-4" data-dir="west" data-idx="4"></div>
+          <div class="eng-node radiation no-circuit" id="node-west-5" data-dir="west" data-idx="5"><span class="rad-sym">☢</span></div>
+        </div>
+      </div>
+
+      <!-- ── NORTH section (top-right) ─────────────────────── -->
+      <div class="eng-section north-section" id="section-north">
+        <div class="section-dir-label">↑ NORTH</div>
+        <div class="section-main-nodes">
+          <div class="eng-node red circuit-1"   id="node-north-0" data-dir="north" data-idx="0"><span class="circuit-badge c1">C1</span></div>
+          <div class="eng-node green circuit-2"  id="node-north-1" data-dir="north" data-idx="1"><span class="circuit-badge c2">C2</span></div>
+          <div class="eng-node yellow circuit-3" id="node-north-2" data-dir="north" data-idx="2"><span class="circuit-badge c3">C3</span></div>
+        </div>
+        <div class="section-divider"><span>⚛</span></div>
+        <div class="section-extra-nodes">
+          <div class="eng-node red no-circuit"       id="node-north-3" data-dir="north" data-idx="3"></div>
+          <div class="eng-node green no-circuit"     id="node-north-4" data-dir="north" data-idx="4"></div>
+          <div class="eng-node radiation no-circuit" id="node-north-5" data-dir="north" data-idx="5"><span class="rad-sym">☢</span></div>
+        </div>
+      </div>
+
+      <!-- ── SOUTH section (bottom-left) ───────────────────── -->
+      <div class="eng-section south-section" id="section-south">
+        <div class="section-dir-label">↓ SOUTH</div>
+        <div class="section-main-nodes">
+          <div class="eng-node red circuit-1"   id="node-south-0" data-dir="south" data-idx="0"><span class="circuit-badge c1">C1</span></div>
+          <div class="eng-node green circuit-2"  id="node-south-1" data-dir="south" data-idx="1"><span class="circuit-badge c2">C2</span></div>
+          <div class="eng-node yellow circuit-3" id="node-south-2" data-dir="south" data-idx="2"><span class="circuit-badge c3">C3</span></div>
+        </div>
+        <div class="section-divider"><span>⚛</span></div>
+        <div class="section-extra-nodes">
+          <div class="eng-node green no-circuit"     id="node-south-3" data-dir="south" data-idx="3"></div>
+          <div class="eng-node yellow no-circuit"    id="node-south-4" data-dir="south" data-idx="4"></div>
+          <div class="eng-node radiation no-circuit" id="node-south-5" data-dir="south" data-idx="5"><span class="rad-sym">☢</span></div>
+        </div>
+      </div>
+
+      <!-- ── EAST section (bottom-right) ───────────────────── -->
+      <div class="eng-section east-section" id="section-east">
+        <div class="section-dir-label">EAST →</div>
+        <div class="section-main-nodes">
+          <div class="eng-node red circuit-1"   id="node-east-0" data-dir="east" data-idx="0"><span class="circuit-badge c1">C1</span></div>
+          <div class="eng-node green circuit-2"  id="node-east-1" data-dir="east" data-idx="1"><span class="circuit-badge c2">C2</span></div>
+          <div class="eng-node yellow circuit-3" id="node-east-2" data-dir="east" data-idx="2"><span class="circuit-badge c3">C3</span></div>
+        </div>
+        <div class="section-divider"><span>⚛</span></div>
+        <div class="section-extra-nodes">
+          <div class="eng-node yellow no-circuit"    id="node-east-3" data-dir="east" data-idx="3"></div>
+          <div class="eng-node red no-circuit"       id="node-east-4" data-dir="east" data-idx="4"></div>
+          <div class="eng-node radiation no-circuit" id="node-east-5" data-dir="east" data-idx="5"><span class="rad-sym">☢</span></div>
+        </div>
+      </div>
+
+    </div><!-- /.eng-board -->
 
     <div class="legend">
       <span class="dot yellow"></span>Stealth

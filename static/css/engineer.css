@@ -8,112 +8,12 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Engineering board: 4 direction columns × 6 node rows
-   Circuit lines drawn as SVG overlay connecting nodes
+   Engineering board: 2×2 section layout
+     top-left  = WEST     top-right = NORTH
+     bot-left  = SOUTH    bot-right = EAST
+   SVG overlay draws circuit loops (C1/C2/C3) across all 4 sections.
    ═══════════════════════════════════════════════════════════ */
 
-/* Outer wrapper: positions relative so SVG can overlay */
-.eng-wrap {
-  position: relative;
-  display: inline-block;   /* shrink-wrap to content */
-  margin: 0 auto;
-  padding: .5rem 1.25rem 1rem;
-  user-select: none;
-}
-
-/* SVG circuit lines overlay — z-index 2 so traces appear above node columns */
-.circuit-svg {
-  position: absolute;
-  top: 0; left: 0;
-  pointer-events: none;
-  z-index: 2;
-  overflow: visible;
-}
-
-/* ── Direction column headers ─────────────────────────────── */
-.eng-col-headers {
-  display: flex;
-  gap: 20px;
-  justify-content: center;
-  margin-bottom: .5rem;
-}
-
-.eng-dir-header {
-  width: 52px;
-  text-align: center;
-  font-size: .78rem;
-  font-weight: 700;
-  letter-spacing: .05em;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  padding: .25rem 0;
-  border-radius: 6px;
-  transition: color .2s, background .2s;
-}
-.eng-dir-header.active {
-  color: var(--accent);
-  background: rgba(6,182,212,.12);
-}
-
-/* ── Columns container ────────────────────────────────────── */
-.eng-cols {
-  display: flex;
-  gap: 20px;             /* space between W / N / S / E columns */
-  justify-content: center;
-  align-items: flex-start;
-  position: relative;
-  z-index: 1;
-}
-
-/* Each direction column */
-.eng-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-  position: relative;
-  padding: 4px 6px;
-  border-radius: 10px;
-  transition: background .2s;
-}
-.eng-col.active-col {
-  background: rgba(6,182,212,.07);
-  outline: 1.5px solid rgba(6,182,212,.25);
-}
-
-/* Reactor divider inside each column (between index 2 and 3) */
-.reactor-divider-inline {
-  width: 100%;
-  text-align: center;
-  font-size: .55rem;
-  letter-spacing: .06em;
-  color: var(--text-muted);
-  opacity: .7;
-  border-top: 1px dashed rgba(255,255,255,.12);
-  padding-top: 4px;
-  margin-top: 1px;
-  margin-bottom: 1px;
-}
-
-/* ── Engineering nodes: CIRCULAR ─────────────────────────── */
-.eng-node {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;            /* ← CIRCULAR */
-  border: 2px solid rgba(255,255,255,.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 1;
-  font-size: .6rem;
-  font-weight: 700;
-  transition: transform .15s, box-shadow .15s, filter .15s;
-  cursor: default;
-  flex-shrink: 0;
-}
-
-/* ── System colour fills (unmarked = translucent, marked = solid) */
 :root {
   --col-red:       #ef4444;
   --col-green:     #22c55e;
@@ -121,64 +21,173 @@
   --col-radiation: #a855f7;
 }
 
+/* Outer board: 2×2 grid, relative for absolute SVG overlay */
+.eng-board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 10px;
+  padding: .75rem;
+  position: relative;
+  margin: 0 auto;
+  max-width: 520px;
+}
+
+/* SVG circuit overlay — drawn by JS, sits above sections */
+.eng-circuit-svg {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: visible;
+}
+
+/* ── Grid placement ───────────────────────────────────────── */
+.west-section  { grid-column: 1; grid-row: 1; }
+.north-section { grid-column: 2; grid-row: 1; }
+.south-section { grid-column: 1; grid-row: 2; }
+.east-section  { grid-column: 2; grid-row: 2; }
+
+/* ── Direction sections ───────────────────────────────────── */
+.eng-section {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1.5px solid rgba(99, 114, 136, 0.3);
+  border-radius: 10px;
+  padding: 10px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+  transition: border-color .2s, background .2s, box-shadow .2s;
+}
+
+.eng-section.active-section {
+  border-color: rgba(6, 182, 212, 0.55);
+  background: rgba(6, 182, 212, 0.06);
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.14), inset 0 0 10px rgba(6, 182, 212, 0.05);
+}
+
+/* Direction label */
+.section-dir-label {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  transition: color .2s;
+}
+.eng-section.active-section .section-dir-label {
+  color: var(--accent);
+}
+
+/* Main circuit nodes row (C1 / C2 / C3) */
+.section-main-nodes {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Reactor divider between main nodes and extra nodes */
+.section-divider {
+  width: 88%;
+  border-top: 1px dashed rgba(255, 255, 255, .12);
+  text-align: center;
+  font-size: .52rem;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  opacity: .6;
+  padding-top: 3px;
+  margin: 0;
+}
+
+/* Extra / reactor nodes row */
+.section-extra-nodes {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ── Engineering nodes ────────────────────────────────────── */
+.eng-node {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  font-size: .6rem;
+  font-weight: 700;
+  transition: transform .15s, box-shadow .15s, filter .15s;
+  cursor: default;
+  flex-shrink: 0;
+}
+
+/* ── System colour fills (translucent when unmarked) ──────── */
 .eng-node.red {
-  background: rgba(239,68,68,.18);
-  border-color: rgba(239,68,68,.40);
+  background: rgba(239, 68, 68, .16);
+  border-color: rgba(239, 68, 68, .38);
   --node-col: var(--col-red);
 }
 .eng-node.green {
-  background: rgba(34,197,94,.18);
-  border-color: rgba(34,197,94,.40);
+  background: rgba(34, 197, 94, .16);
+  border-color: rgba(34, 197, 94, .38);
   --node-col: var(--col-green);
 }
 .eng-node.yellow {
-  background: rgba(234,179,8,.18);
-  border-color: rgba(234,179,8,.40);
+  background: rgba(234, 179, 8, .16);
+  border-color: rgba(234, 179, 8, .38);
   --node-col: var(--col-yellow);
 }
 .eng-node.radiation {
-  background: rgba(168,85,247,.18);
-  border-color: rgba(168,85,247,.40);
+  background: rgba(168, 85, 247, .16);
+  border-color: rgba(168, 85, 247, .38);
   --node-col: var(--col-radiation);
 }
 
-/* Marked = solid fill */
+/* Marked = solid fill + glow */
 .eng-node.marked {
   background: var(--node-col) !important;
   border-color: var(--node-col) !important;
-  box-shadow: 0 0 8px var(--node-col);
+  box-shadow: 0 0 9px var(--node-col);
 }
 
-/* ── Circuit ring outlines ────────────────────────────────── */
-.eng-node.circuit-1 { outline: 2px solid rgba(249,115,22,.70); outline-offset: 2px; }
-.eng-node.circuit-2 { outline: 2px solid rgba(6,182,212,.70);  outline-offset: 2px; }
-.eng-node.circuit-3 { outline: 2px solid rgba(236,72,153,.70); outline-offset: 2px; }
+/* ── Circuit ring outlines (C1 / C2 / C3) ────────────────── */
+.eng-node.circuit-1 { outline: 2px solid rgba(249, 115,  22, .65); outline-offset: 2px; }
+.eng-node.circuit-2 { outline: 2px solid rgba(  6, 182, 212, .65); outline-offset: 2px; }
+.eng-node.circuit-3 { outline: 2px solid rgba(236,  72, 153, .65); outline-offset: 2px; }
 
-/* ── Clickable glow ──────────────────────────────────────── */
+/* ── Clickable glow + pulse ───────────────────────────────── */
 .eng-node.clickable {
   cursor: pointer;
   box-shadow: 0 0 10px var(--node-col);
   animation: pulse-glow 1.4s infinite alternate;
 }
 @keyframes pulse-glow {
-  from { box-shadow: 0 0 6px  var(--node-col); }
-  to   { box-shadow: 0 0 16px var(--node-col); }
+  from { box-shadow: 0 0  6px var(--node-col); }
+  to   { box-shadow: 0 0 18px var(--node-col); }
 }
 .eng-node.clickable:hover {
-  transform: scale(1.12);
-  filter: brightness(1.25);
+  transform: scale(1.13);
+  filter: brightness(1.3);
 }
 
-/* ── Radiation symbol ────────────────────────────────────── */
+/* ── Radiation symbol ─────────────────────────────────────── */
 .rad-sym {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   opacity: .85;
-  z-index: 1;
   position: relative;
+  z-index: 1;
 }
 .eng-node.marked .rad-sym { color: #fff; }
 
-/* ── Circuit badge (C1/C2/C3 label) ─────────────────────── */
+/* ── Circuit badge (C1 / C2 / C3 label) ──────────────────── */
 .circuit-badge {
   position: absolute;
   bottom: 1px;
@@ -193,7 +202,7 @@
 .circuit-badge.c1 { color: #f97316; }
 .circuit-badge.c2 { color: #06b6d4; }
 .circuit-badge.c3 { color: #ec4899; }
-.eng-node.marked .circuit-badge { color: #fff; opacity: .7; }
+.eng-node.marked .circuit-badge { color: #fff; opacity: .65; }
 
 /* ── Damage flash ─────────────────────────────────────────── */
 @keyframes damage-flash-anim {
@@ -204,7 +213,7 @@
   animation: damage-flash-anim 0.9s ease-out !important;
 }
 
-/* ── Legend ──────────────────────────────────────────────── */
+/* ── Legend ───────────────────────────────────────────────── */
 .legend {
   display: flex;
   flex-wrap: wrap;

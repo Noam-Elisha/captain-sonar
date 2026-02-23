@@ -1,60 +1,22 @@
 /* ============================================================
    Captain Sonar — engineer.js
-   Engineering board: 4 direction columns × 6 node rows,
-   with SVG circuit lines connecting nodes across all 4 directions.
+   Engineering board: 2×2 section layout (WEST/NORTH/SOUTH/EAST)
+   SVG overlay draws closed circuit loops (C1/C2/C3) connecting
+   the same-circuit node across all four direction sections.
    ============================================================ */
 
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
 
-// Engineering board layout — mirrors game_state.py ENGINEERING_LAYOUT exactly
-// Indices 0-2: circuit nodes (C1=red, C2=green, C3=yellow) one per direction
-// Indices 3-4: extra non-circuit Central Circuit nodes
-// Index  5:   radiation (reactor)
-const ENG_LAYOUT = {
-  west:  [
-    {color:'red',       circuit:1},    // 0  mine/torpedo  C1
-    {color:'green',     circuit:2},    // 1  sonar/drone   C2
-    {color:'yellow',    circuit:3},    // 2  stealth        C3
-    {color:'yellow',    circuit:null}, // 3  stealth (extra)
-    {color:'red',       circuit:null}, // 4  mine/torpedo (extra)
-    {color:'radiation', circuit:null}, // 5  reactor
-  ],
-  north: [
-    {color:'red',       circuit:1},
-    {color:'green',     circuit:2},
-    {color:'yellow',    circuit:3},
-    {color:'red',       circuit:null},
-    {color:'green',     circuit:null},
-    {color:'radiation', circuit:null},
-  ],
-  south: [
-    {color:'red',       circuit:1},
-    {color:'green',     circuit:2},
-    {color:'yellow',    circuit:3},
-    {color:'green',     circuit:null},
-    {color:'yellow',    circuit:null},
-    {color:'radiation', circuit:null},
-  ],
-  east:  [
-    {color:'red',       circuit:1},
-    {color:'green',     circuit:2},
-    {color:'yellow',    circuit:3},
-    {color:'yellow',    circuit:null},
-    {color:'red',       circuit:null},
-    {color:'radiation', circuit:null},
-  ],
-};
+// All four direction IDs used for per-section updates
+const DIRS = ['west', 'north', 'south', 'east'];
 
-const DIR_ORDER   = ['west', 'north', 'south', 'east'];
-const DIR_LABELS  = {west: '← W', north: '↑ N', south: '↓ S', east: 'E →'};
-const CIRCUIT_COLORS = {1: '#f97316', 2: '#06b6d4', 3: '#ec4899'};
+// Circuit colours: index = node position within section's main-nodes row
+//   0 → C1 (orange), 1 → C2 (cyan), 2 → C3 (pink)
+const CIRCUIT_COLORS = { 0: '#f97316', 1: '#06b6d4', 2: '#ec4899' };
 
-const COLOR_LABELS = {
-  red:       'Mine / Torpedo',
-  green:     'Sonar / Drone',
-  yellow:    'Stealth',
-  radiation: 'Radiation (reactor)',
-};
+// Loop drawing order: TL(west) → TR(north) → BR(east) → BL(south) → back
+// This traces a clockwise rectangle across the four sections.
+const LOOP_ORDER = ['west', 'north', 'east', 'south'];
 
 let board       = null;
 let activeDir   = null;
@@ -65,8 +27,8 @@ let enemyHealth = 4;
 const socket = io();
 
 socket.on('connect', () => {
-  socket.emit('join_room',  {game_id: GAME_ID});
-  socket.emit('join_game',  {game_id: GAME_ID, name: MY_NAME});
+  socket.emit('join_room', { game_id: GAME_ID });
+  socket.emit('join_game', { game_id: GAME_ID, name: MY_NAME });
 });
 
 socket.on('game_state', state => {
@@ -83,9 +45,9 @@ socket.on('game_state', state => {
   const moved      = state.turn_state?.moved;
   const engDone    = state.turn_state?.engineer_done;
   const dir        = state.turn_state?.direction;
-  const stealthDir = state.turn_state?.stealth_direction; // private — only own team sees this
+  const stealthDir = state.turn_state?.stealth_direction; // only own team sees this
 
-  // Use public direction if available; fall back to private stealth direction
+  // Use public direction; fall back to private stealth direction
   const effectiveDir = dir || stealthDir || null;
   activeDir = (isMyTurn && moved && !engDone && effectiveDir) ? effectiveDir : null;
   canMark   = !!activeDir;
@@ -100,8 +62,8 @@ socket.on('direction_to_mark', data => {
   updateStatus();
   renderBoard();
   const label = data.is_stealth
-    ? `👻 STEALTH move — mark a node in the ${data.direction.toUpperCase()} column (secret!)`
-    : `⚡ Mark a node in the ${data.direction.toUpperCase()} column!`;
+    ? `👻 STEALTH move — mark a node in the ${data.direction.toUpperCase()} section (secret!)`
+    : `⚡ Mark a node in the ${data.direction.toUpperCase()} section!`;
   logEvent(label, 'highlight');
 });
 
@@ -122,7 +84,6 @@ socket.on('turn_start', data => {
   if (data.team === MY_TEAM) {
     logEvent('🔔 OUR TURN — wait for captain to move', 'highlight');
   }
-  // Don't log "X team's turn" — reduces event log noise
 });
 
 socket.on('damage', data => {
@@ -147,7 +108,6 @@ socket.on('circuit_cleared', data => {
 });
 
 socket.on('sonar_result', data => {
-  // Show in event log so engineer knows sonar completed
   if (data.target === MY_TEAM) {
     logEvent('📡 Sonar complete — result reported to captain & first mate', 'good');
   }
@@ -164,7 +124,7 @@ socket.on('drone_result', data => {
 
 socket.on('surface_announced', data => {
   if (data.team === MY_TEAM) { myHealth = data.health; renderHealth(); }
-  else { enemyHealth = data.health; renderHealth(); }
+  else                        { enemyHealth = data.health; renderHealth(); }
   logEvent(`🌊 ${data.team} surfaced in sector ${data.sector}`);
 });
 
@@ -177,8 +137,8 @@ socket.on('game_over', data => {
 socket.on('error', data => showToast(data.msg, true));
 
 socket.on('bot_chat', data => {
-  const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
-  logEvent(`${icons[data.role]||'🤖'} [${data.name}]: ${data.msg}`, 'bot');
+  const icons = { captain: '🤖🎖', first_mate: '🤖⚙', engineer: '🤖🔧', radio_operator: '🤖📡' };
+  logEvent(`${icons[data.role] || '🤖'} [${data.name}]: ${data.msg}`, 'bot');
 });
 
 // ── Render all ────────────────────────────────────────────────
@@ -195,118 +155,61 @@ function renderHearts(id, hp, max) {
   el.innerHTML = '';
   for (let i = 0; i < max; i++) {
     const s = document.createElement('span');
-    s.className = 'health-heart' + (i < hp ? '' : ' empty');
+    s.className   = 'health-heart' + (i < hp ? '' : ' empty');
     s.textContent = i < hp ? '❤️' : '🖤';
     el.appendChild(s);
   }
 }
 
-// ── Board render ──────────────────────────────────────────────
+// ── Board render — updates existing static HTML, no DOM rebuild ──
 function renderBoard() {
-  const container = document.getElementById('eng-board');
-  container.innerHTML = '';
+  DIRS.forEach(dir => {
+    const section = document.getElementById(`section-${dir}`);
+    if (!section) return;
 
-  const wrap = document.createElement('div');
-  wrap.className = 'eng-wrap';
-  wrap.id        = 'eng-wrap';
-
-  // Direction column headers
-  const headers = document.createElement('div');
-  headers.className = 'eng-col-headers';
-  DIR_ORDER.forEach(dir => {
-    const h = document.createElement('div');
-    h.className = `eng-dir-header${activeDir === dir ? ' active' : ''}`;
-    h.textContent = DIR_LABELS[dir];
-    headers.appendChild(h);
-  });
-  wrap.appendChild(headers);
-
-  // Node columns container
-  const colsWrap = document.createElement('div');
-  colsWrap.className = 'eng-cols';
-  colsWrap.id        = 'eng-cols';
-
-  DIR_ORDER.forEach(dir => {
-    const col = document.createElement('div');
-    col.className  = `eng-col${activeDir === dir ? ' active-col' : ''}`;
-    col.dataset.dir = dir;
+    // Highlight the active direction section
+    section.classList.toggle('active-section', activeDir === dir);
 
     const serverNodes = board?.[dir];
 
-    ENG_LAYOUT[dir].forEach((def, idx) => {
-      // Insert REACTOR divider between index 2 and 3
-      if (idx === 3) {
-        const divider = document.createElement('div');
-        divider.className = 'reactor-divider-inline';
-        divider.innerHTML = '<span>⚛</span>';
-        col.appendChild(divider);
-      }
+    for (let idx = 0; idx < 6; idx++) {
+      const node = document.getElementById(`node-${dir}-${idx}`);
+      if (!node) continue;
 
       const marked      = serverNodes?.[idx]?.marked ?? false;
       const isActive    = (dir === activeDir);
       const isClickable = canMark && isActive && !marked;
 
-      const node = document.createElement('div');
-      node.id        = `node-${dir}-${idx}`;
-      node.className = [
-        'eng-node',
-        def.color,
-        def.circuit ? `circuit-${def.circuit}` : 'no-circuit',
-        idx < 3 ? 'cc-zone' : 'reactor-zone',
-        marked      ? 'marked'    : '',
-        isClickable ? 'clickable' : '',
-      ].filter(Boolean).join(' ');
+      node.classList.toggle('marked',    marked);
+      node.classList.toggle('clickable', isClickable);
 
-      node.dataset.dir = dir;
-      node.dataset.idx = idx;
-      node.title = `${dir.toUpperCase()} [${idx}] — ${COLOR_LABELS[def.color] || def.color}`
-        + (def.circuit ? ` · Circuit C${def.circuit}` : '');
-
-      if (def.color === 'radiation') {
-        const sym = document.createElement('span');
-        sym.className   = 'rad-sym';
-        sym.textContent = '☢';
-        node.appendChild(sym);
-      }
-
-      if (def.circuit !== null) {
-        const badge = document.createElement('span');
-        badge.className   = `circuit-badge c${def.circuit}`;
-        badge.textContent = `C${def.circuit}`;
-        node.appendChild(badge);
-      }
-
-      if (isClickable) node.addEventListener('click', () => markNode(dir, idx));
-      col.appendChild(node);
-    });
-
-    colsWrap.appendChild(col);
+      // Replace onclick each render to avoid stale closures
+      node.onclick = isClickable ? (() => { const d = dir, i = idx; return () => markNode(d, i); })() : null;
+    }
   });
 
-  wrap.appendChild(colsWrap);
-  container.appendChild(wrap);
-
-  // Draw SVG circuit lines after DOM is rendered
   requestAnimationFrame(drawCircuitLines);
 }
 
-// ── SVG circuit lines ─────────────────────────────────────────
+// ── SVG circuit loops ─────────────────────────────────────────
 function drawCircuitLines() {
-  const wrap = document.getElementById('eng-wrap');
-  if (!wrap) return;
-  wrap.querySelectorAll('.circuit-svg').forEach(s => s.remove());
+  const svg  = document.getElementById('eng-circuit-svg');
+  const wrap = document.getElementById('eng-board');
+  if (!svg || !wrap) return;
+  svg.innerHTML = '';
 
   const wrapRect = wrap.getBoundingClientRect();
   if (wrapRect.width === 0) return;
 
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.className = 'circuit-svg';
   svg.setAttribute('width',  wrapRect.width);
   svg.setAttribute('height', wrapRect.height);
 
-  [1, 2, 3].forEach(cid => {
-    const nodeIdx = cid - 1;
-    const pts = DIR_ORDER.map(dir => {
+  // Draw one closed loop per circuit (C1=idx0, C2=idx1, C3=idx2)
+  [0, 1, 2].forEach(nodeIdx => {
+    const color = CIRCUIT_COLORS[nodeIdx];
+
+    // Collect centre points in loop order: west(TL)→north(TR)→east(BR)→south(BL)
+    const pts = LOOP_ORDER.map(dir => {
       const el = document.getElementById(`node-${dir}-${nodeIdx}`);
       if (!el) return null;
       const r = el.getBoundingClientRect();
@@ -318,45 +221,44 @@ function drawCircuitLines() {
 
     if (pts.length < 2) return;
 
-    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    poly.setAttribute('points',         pts.map(p => `${p.x},${p.y}`).join(' '));
-    poly.setAttribute('stroke',         CIRCUIT_COLORS[cid]);
-    poly.setAttribute('stroke-width',   '4');
-    poly.setAttribute('stroke-opacity', '0.80');
-    poly.setAttribute('fill',           'none');
-    poly.setAttribute('stroke-linecap', 'round');
-    poly.setAttribute('stroke-linejoin','round');
-    svg.appendChild(poly);
+    // Closed polygon tracing all four node centres
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points',          pts.map(p => `${p.x},${p.y}`).join(' '));
+    polygon.setAttribute('stroke',          color);
+    polygon.setAttribute('stroke-width',    '2.5');
+    polygon.setAttribute('stroke-opacity',  '0.55');
+    polygon.setAttribute('fill',            'none');
+    polygon.setAttribute('stroke-linecap',  'round');
+    polygon.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(polygon);
 
-    // Small glow dots at node centres
+    // Subtle glow dots at each node centre
     pts.forEach(p => {
       const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       c.setAttribute('cx',           p.x);
       c.setAttribute('cy',           p.y);
       c.setAttribute('r',            '6');
-      c.setAttribute('fill',         CIRCUIT_COLORS[cid]);
-      c.setAttribute('fill-opacity', '0.35');
+      c.setAttribute('fill',         color);
+      c.setAttribute('fill-opacity', '0.25');
       svg.appendChild(c);
     });
   });
-
-  wrap.appendChild(svg);
 }
 
 function flashDir(dir) {
-  ENG_LAYOUT[dir].forEach((_, idx) => {
+  for (let idx = 0; idx < 6; idx++) {
     const node = document.getElementById(`node-${dir}-${idx}`);
     if (node) {
       node.classList.add('damage-flash');
       setTimeout(() => node.classList.remove('damage-flash'), 900);
     }
-  });
+  }
 }
 
 function markNode(dir, idx) {
   if (!canMark || dir !== activeDir) return;
   canMark = false;
-  socket.emit('engineer_mark', {game_id: GAME_ID, name: MY_NAME, direction: dir, index: idx});
+  socket.emit('engineer_mark', { game_id: GAME_ID, name: MY_NAME, direction: dir, index: idx });
   renderBoard();
 }
 
@@ -364,7 +266,7 @@ function updateStatus() {
   const el = document.getElementById('eng-status');
   if (!el) return;
   if (canMark && activeDir) {
-    el.textContent = `⚡ Mark a node in the ${activeDir.toUpperCase()} column`;
+    el.textContent = `⚡ Mark a node in the ${activeDir.toUpperCase()} section`;
     el.style.color = 'var(--accent)';
   } else {
     el.textContent = 'Waiting for captain to move…';
@@ -375,7 +277,7 @@ function updateStatus() {
 function logEvent(msg, cls) {
   const log   = document.getElementById('event-log');
   const entry = document.createElement('div');
-  entry.className = 'log-entry' + (cls ? ' ' + cls : '');
+  entry.className   = 'log-entry' + (cls ? ' ' + cls : '');
   entry.textContent = msg;
   log.prepend(entry);
   while (log.children.length > 50) log.lastChild.remove();
