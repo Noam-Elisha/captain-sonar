@@ -274,9 +274,11 @@ function submitSonar() {
 function openDrone() {
   const sGrid = document.getElementById('drone-sectors');
   sGrid.innerHTML = '';
-  for (let s = 1; s <= 9; s++) {
-    const btn     = document.createElement('button');
-    btn.textContent = s;
+  // RULEBOOK: TBT mode uses 4 sectors (2×2 quadrant layout: top-left/right, bottom-left/right)
+  const sectorLabels = {1: '1 (top-left)', 2: '2 (top-right)', 3: '3 (bottom-left)', 4: '4 (bottom-right)'};
+  for (let s = 1; s <= 4; s++) {
+    const btn       = document.createElement('button');
+    btn.textContent = sectorLabels[s];
     btn.onclick     = () => submitDrone(s);
     sGrid.appendChild(btn);
   }

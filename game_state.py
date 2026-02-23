@@ -528,16 +528,13 @@ def captain_fire_torpedo(game, team, target_row, target_col):
     if dist > 4 or dist == 0:
         return False, "Torpedo range: 1–4 spaces (Manhattan distance)", []
 
-    # System unavailable (not charged or blocked) → 1 damage, no shot
-    if not _check_charge(sub, "torpedo") or is_system_blocked(sub["engineering"], "torpedo"):
-        sub["health"] -= 1
-        game["turn_state"]["system_used"] = True
-        events = [{"type": "damage", "team": team, "amount": 1,
-                   "health": sub["health"], "cause": "system_failure"}]
-        result = _check_game_over(game)
-        if result:
-            events.append(result)
-        return True, "System unavailable — took 1 damage", events
+    # RULEBOOK: "Confirm with the Engineer that there are no breakdowns affecting the system.
+    # If there are, they must be repaired before the system can be activated."
+    # Simply reject — do NOT deal damage for attempting to use an unavailable system.
+    if not _check_charge(sub, "torpedo"):
+        return False, "Torpedo not fully charged yet", []
+    if is_system_blocked(sub["engineering"], "torpedo"):
+        return False, "Torpedo blocked by engineer breakdown (red node marked)", []
 
     _use_system(sub, "torpedo")
     game["turn_state"]["system_used"] = True
@@ -579,16 +576,11 @@ def captain_place_mine(game, team, target_row, target_col):
     if [target_row, target_col] in sub["trail"]:
         return False, "Cannot place mine on a cell already in your route", []
 
-    # System unavailable (not charged or blocked) → 1 damage, no mine placed
-    if not _check_charge(sub, "mine") or is_system_blocked(sub["engineering"], "mine"):
-        sub["health"] -= 1
-        game["turn_state"]["system_used"] = True
-        events = [{"type": "damage", "team": team, "amount": 1,
-                   "health": sub["health"], "cause": "system_failure"}]
-        result = _check_game_over(game)
-        if result:
-            events.append(result)
-        return True, "System unavailable — took 1 damage", events
+    # RULEBOOK: "must be repaired before the system can be activated" — reject, no damage.
+    if not _check_charge(sub, "mine"):
+        return False, "Mine system not fully charged yet", []
+    if is_system_blocked(sub["engineering"], "mine"):
+        return False, "Mine system blocked by engineer breakdown (red node marked)", []
 
     _use_system(sub, "mine")
     game["turn_state"]["system_used"] = True
@@ -620,13 +612,20 @@ def captain_detonate_mine(game, team, mine_index):
 
 
 def _apply_explosion(game, firing_team, target_row, target_col):
-    """Apply torpedo/mine explosion damage. Friendly fire included."""
+    """Apply torpedo/mine explosion damage. Friendly fire included.
+    RULEBOOK: damage radius uses Chebyshev distance (includes diagonals).
+      Direct hit (same cell):       2 damage
+      Adjacent (Chebyshev dist 1):  1 damage  ← includes 8 surrounding cells
+    Rulebook example: mine at B7, sub at C6 (diagonally adjacent) → indirect hit.
+    """
     events = []
     for team, sub in game["submarines"].items():
         if sub["position"] is None:
             continue
         r, c = sub["position"]
-        dist = abs(target_row - r) + abs(target_col - c)
+        # RULEBOOK: use Chebyshev distance (max of row-diff and col-diff)
+        # so all 8 surrounding cells are within distance 1 (not just N/S/E/W)
+        dist = max(abs(target_row - r), abs(target_col - c))
         if dist == 0:
             dmg = 2
         elif dist == 1:
@@ -790,20 +789,12 @@ def captain_use_stealth(game, team, direction, steps):
 
     sub = game["submarines"][team]
 
-    # System unavailable → 1 damage, no movement
-    if not _check_charge(sub, "stealth") or is_system_blocked(sub["engineering"], "stealth"):
-        sub["health"] -= 1
-        game["turn_state"]["system_used"] = True
-        game["turn_state"]["moved"] = True
-        game["turn_state"]["direction"] = None
-        game["turn_state"]["engineer_done"] = True
-        game["turn_state"]["first_mate_done"] = True
-        events = [{"type": "damage", "team": team, "amount": 1,
-                   "health": sub["health"], "cause": "system_failure"}]
-        result = _check_game_over(game)
-        if result:
-            events.append(result)
-        return True, "System unavailable — took 1 damage", events
+    # RULEBOOK: "must be repaired before the system can be activated" — reject, no damage.
+    # If stealth isn't available the captain must make a normal move or surface instead.
+    if not _check_charge(sub, "stealth"):
+        return False, "Stealth (Silence) system not fully charged yet", []
+    if is_system_blocked(sub["engineering"], "stealth"):
+        return False, "Stealth blocked by engineer breakdown (yellow node marked)", []
 
     # Validate straight-line path
     r, c = sub["position"]

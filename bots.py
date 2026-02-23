@@ -84,7 +84,10 @@ class CaptainBot:
 
         rows = map_def["rows"]
         cols = map_def["cols"]
-        total_sectors = (rows // map_def["sector_size"]) * (cols // map_def["sector_size"])
+        import math
+        # RULEBOOK: TBT mode has 4 sectors (2×2). Use ceiling division to match get_sector().
+        total_sectors = (math.ceil(rows / map_def["sector_size"])
+                         * math.ceil(cols / map_def["sector_size"]))
 
         def true_val(t):
             if t == "row":    return er
@@ -249,8 +252,9 @@ class CaptainBot:
                 return ("torpedo", target[0], target[1])
 
         # Use drone if charged and sector unknown
+        # RULEBOOK: TBT mode has 4 sectors (1-4), not 9
         if charge("drone") >= SYSTEM_MAX_CHARGE["drone"] and self.known_enemy_sector is None:
-            sector = random.randint(1, 9)
+            sector = random.randint(1, 4)
             return ("drone", sector)
 
         # Use sonar if charged (interactive flow: enemy captain responds)
