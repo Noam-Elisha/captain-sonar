@@ -1,8 +1,8 @@
 /* ============================================================
    Captain Sonar — engineer.js
    Engineering board: 2×2 section layout (WEST/NORTH/SOUTH/EAST)
-   SVG overlay draws closed circuit loops (C1/C2/C3) connecting
-   the same-circuit node across all four direction sections.
+   SVG overlay draws circuit spokes (C1/C2/C3): EAST is the hub —
+   one line from each of west/north/south → corresponding east node.
    ============================================================ */
 
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
@@ -14,9 +14,8 @@ const DIRS = ['west', 'north', 'south', 'east'];
 //   0 → C1 (orange), 1 → C2 (cyan), 2 → C3 (pink)
 const CIRCUIT_COLORS = { 0: '#f97316', 1: '#06b6d4', 2: '#ec4899' };
 
-// Loop drawing order: TL(west) → TR(north) → BR(east) → BL(south) → back
-// This traces a clockwise rectangle across the four sections.
-const LOOP_ORDER = ['west', 'north', 'east', 'south'];
+// The three non-hub directions that each send one spoke to EAST (the hub)
+const SPOKE_DIRS = ['west', 'north', 'south'];
 
 let board       = null;
 let activeDir   = null;
@@ -191,7 +190,8 @@ function renderBoard() {
   requestAnimationFrame(drawCircuitLines);
 }
 
-// ── SVG circuit loops ─────────────────────────────────────────
+// ── SVG circuit spokes ────────────────────────────────────────
+// EAST is the hub: one spoke per circuit from each of west/north/south → east.
 function drawCircuitLines() {
   const svg  = document.getElementById('eng-circuit-svg');
   const wrap = document.getElementById('eng-board');
@@ -204,42 +204,49 @@ function drawCircuitLines() {
   svg.setAttribute('width',  wrapRect.width);
   svg.setAttribute('height', wrapRect.height);
 
-  // Draw one closed loop per circuit (C1=idx0, C2=idx1, C3=idx2)
   [0, 1, 2].forEach(nodeIdx => {
     const color = CIRCUIT_COLORS[nodeIdx];
 
-    // Collect centre points in loop order: west(TL)→north(TR)→east(BR)→south(BL)
-    const pts = LOOP_ORDER.map(dir => {
+    // Hub: EAST node centre
+    const hubEl = document.getElementById(`node-east-${nodeIdx}`);
+    if (!hubEl) return;
+    const hr = hubEl.getBoundingClientRect();
+    const hx = +(hr.left - wrapRect.left + hr.width  / 2).toFixed(1);
+    const hy = +(hr.top  - wrapRect.top  + hr.height / 2).toFixed(1);
+
+    // One spoke from each of west / north / south → east hub
+    SPOKE_DIRS.forEach(dir => {
       const el = document.getElementById(`node-${dir}-${nodeIdx}`);
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return {
-        x: +(r.left - wrapRect.left + r.width  / 2).toFixed(1),
-        y: +(r.top  - wrapRect.top  + r.height / 2).toFixed(1),
-      };
-    }).filter(Boolean);
+      if (!el) return;
+      const r  = el.getBoundingClientRect();
+      const x1 = +(r.left - wrapRect.left + r.width  / 2).toFixed(1);
+      const y1 = +(r.top  - wrapRect.top  + r.height / 2).toFixed(1);
 
-    if (pts.length < 2) return;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1',             x1);
+      line.setAttribute('y1',             y1);
+      line.setAttribute('x2',             hx);
+      line.setAttribute('y2',             hy);
+      line.setAttribute('stroke',         color);
+      line.setAttribute('stroke-width',   '2');
+      line.setAttribute('stroke-opacity', '0.5');
+      line.setAttribute('stroke-linecap', 'round');
+      svg.appendChild(line);
+    });
 
-    // Closed polygon tracing all four node centres
-    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    polygon.setAttribute('points',          pts.map(p => `${p.x},${p.y}`).join(' '));
-    polygon.setAttribute('stroke',          color);
-    polygon.setAttribute('stroke-width',    '2.5');
-    polygon.setAttribute('stroke-opacity',  '0.55');
-    polygon.setAttribute('fill',            'none');
-    polygon.setAttribute('stroke-linecap',  'round');
-    polygon.setAttribute('stroke-linejoin', 'round');
-    svg.appendChild(polygon);
-
-    // Subtle glow dots at each node centre
-    pts.forEach(p => {
-      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      c.setAttribute('cx',           p.x);
-      c.setAttribute('cy',           p.y);
-      c.setAttribute('r',            '6');
+    // Subtle glow dot at each circuit node (all four directions)
+    DIRS.forEach(dir => {
+      const el = document.getElementById(`node-${dir}-${nodeIdx}`);
+      if (!el) return;
+      const r  = el.getBoundingClientRect();
+      const cx = +(r.left - wrapRect.left + r.width  / 2).toFixed(1);
+      const cy = +(r.top  - wrapRect.top  + r.height / 2).toFixed(1);
+      const c  = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx',           cx);
+      c.setAttribute('cy',           cy);
+      c.setAttribute('r',            '5');
       c.setAttribute('fill',         color);
-      c.setAttribute('fill-opacity', '0.25');
+      c.setAttribute('fill-opacity', '0.22');
       svg.appendChild(c);
     });
   });
