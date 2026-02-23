@@ -3,22 +3,25 @@ Captain Sonar – Server-side game state (turn-based mode).
 
 Engineering board layout (Map Alpha standard):
   Each direction section has 6 nodes indexed 0-5.
-  Indices 0-2: Central Circuit nodes (one per circuit C1/C2/C3, span all 4 directions).
-  Indices 3-4: Extra non-circuit Central Circuit nodes (block system until surfacing).
+  Indices 0-2: Circuit nodes (one per circuit C1/C2/C3, span all 4 directions).
+  Indices 3-4: Extra non-circuit nodes (block a system when marked).
   Index  5:   Reactor/radiation node.
 
-  ALL directions use same structure:
-    0: red/C1   → mine+torpedo system
-    1: green/C2 → sonar+drone system
-    2: yellow/C3 → stealth system
-    3: extra non-circuit node (system varies by direction)
-    4: extra non-circuit node (system varies by direction)
-    5: radiation (reactor)
+  Node colors vary by direction (real board layout):
+    WEST:  [red/C1,    green/C2,   yellow/C3,  yellow, red,   radiation]
+    NORTH: [yellow/C1, red/C2,     yellow/C3,  red,    green, radiation]
+    SOUTH: [green/C1,  yellow/C2,  red/C3,     green,  yellow,radiation]
+    EAST:  [red/C1,    green/C2,   yellow/C3,  yellow, red,   radiation]
 
   Circuits span all 4 directions (one node per direction per circuit):
-    C1 (orange): N[0], S[0], E[0], W[0]  – mine/torpedo nodes
-    C2 (cyan):   N[1], S[1], E[1], W[1]  – sonar/drone nodes
-    C3 (pink):   N[2], S[2], E[2], W[2]  – stealth nodes
+    C1 (orange): W[0]=red,    N[0]=yellow, S[0]=green,  E[0]=red
+    C2 (cyan):   W[1]=green,  N[1]=red,    S[1]=yellow, E[1]=green
+    C3 (pink):   W[2]=yellow, N[2]=yellow, S[2]=red,    E[2]=yellow
+
+  Visual circuit routing (SVG overlay):
+    WEST  bundle (C1-orange): W[0]─W[1]─W[2] → E[0] (hub)
+    NORTH bundle (C2-cyan):   N[0]─N[1]─N[2] → E[1] (hub)
+    SOUTH bundle (C3-pink):   S[0]─S[1]─S[2] → E[2] (hub)
 
   When all 4 nodes of a circuit are marked → they self-clear (no damage).
   When all 6 nodes of one direction section are marked → 1 damage + clear ENTIRE board.
@@ -65,17 +68,17 @@ ENGINEERING_LAYOUT = {
         {"color": "radiation", "circuit": None}, # 5  reactor
     ],
     "north": [
-        {"color": "red",       "circuit": 1},   # 0  mine/torpedo  C1
-        {"color": "green",     "circuit": 2},   # 1  sonar/drone   C2
-        {"color": "yellow",    "circuit": 3},   # 2  stealth        C3
+        {"color": "yellow",    "circuit": 1},   # 0  stealth         C1
+        {"color": "red",       "circuit": 2},   # 1  mine/torpedo    C2
+        {"color": "yellow",    "circuit": 3},   # 2  stealth         C3
         {"color": "red",       "circuit": None}, # 3  mine/torpedo (extra)
         {"color": "green",     "circuit": None}, # 4  sonar/drone (extra)
         {"color": "radiation", "circuit": None}, # 5  reactor
     ],
     "south": [
-        {"color": "red",       "circuit": 1},   # 0  mine/torpedo  C1
-        {"color": "green",     "circuit": 2},   # 1  sonar/drone   C2
-        {"color": "yellow",    "circuit": 3},   # 2  stealth        C3
+        {"color": "green",     "circuit": 1},   # 0  sonar/drone     C1
+        {"color": "yellow",    "circuit": 2},   # 1  stealth         C2
+        {"color": "red",       "circuit": 3},   # 2  mine/torpedo    C3
         {"color": "green",     "circuit": None}, # 3  sonar/drone (extra)
         {"color": "yellow",    "circuit": None}, # 4  stealth (extra)
         {"color": "radiation", "circuit": None}, # 5  reactor
@@ -91,10 +94,11 @@ ENGINEERING_LAYOUT = {
 }
 
 # circuit_id → list of (direction, index) pairs – each circuit spans all 4 directions
+# Node colors vary per direction (see ENGINEERING_LAYOUT above).
 CIRCUITS = {
-    1: [("north", 0), ("south", 0), ("east", 0), ("west", 0)],  # red:  mine/torpedo
-    2: [("north", 1), ("south", 1), ("east", 1), ("west", 1)],  # green: sonar/drone
-    3: [("north", 2), ("south", 2), ("east", 2), ("west", 2)],  # yellow: stealth
+    1: [("north", 0), ("south", 0), ("east", 0), ("west", 0)],  # C1: N=yellow, S=green,  E=red,   W=red
+    2: [("north", 1), ("south", 1), ("east", 1), ("west", 1)],  # C2: N=red,    S=yellow, E=green, W=green
+    3: [("north", 2), ("south", 2), ("east", 2), ("west", 2)],  # C3: N=yellow, S=red,    E=yellow,W=yellow
 }
 
 # Radiation node positions (one per direction = 4 total)

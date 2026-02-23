@@ -1,8 +1,12 @@
 /* ============================================================
    Captain Sonar — engineer.js
    Engineering board: 2×2 section layout (WEST/NORTH/SOUTH/EAST)
-   SVG overlay draws circuit spokes (C1/C2/C3): EAST is the hub —
-   one line from each of west/north/south → corresponding east node.
+   SVG overlay draws circuits (C1/C2/C3):
+     Intra-panel: chain the 3 circuit nodes within each non-EAST section.
+     Inter-panel: ONE exit line per section → its designated EAST hub node.
+       WEST  bundle (C1, orange): W[0]─W[1]─W[2] → E[0]
+       NORTH bundle (C2, cyan):   N[0]─N[1]─N[2] → E[1]
+       SOUTH bundle (C3, pink):   S[0]─S[1]─S[2] → E[2]
    ============================================================ */
 
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
@@ -14,8 +18,14 @@ const DIRS = ['west', 'north', 'south', 'east'];
 //   0 → C1 (orange), 1 → C2 (cyan), 2 → C3 (pink)
 const CIRCUIT_COLORS = { 0: '#f97316', 1: '#06b6d4', 2: '#ec4899' };
 
-// The three non-hub directions that each send one spoke to EAST (the hub)
-const SPOKE_DIRS = ['west', 'north', 'south'];
+// Each non-EAST direction bundles its 3 circuit nodes (idx 0–2) into one chain,
+// then exits with ONE inter-panel line to the designated EAST hub node.
+// WEST → E[0] (C1, orange)  |  NORTH → E[1] (C2, cyan)  |  SOUTH → E[2] (C3, pink)
+const CIRCUIT_BUNDLES = [
+  { dir: 'west',  hubIdx: 0, color: CIRCUIT_COLORS[0] },
+  { dir: 'north', hubIdx: 1, color: CIRCUIT_COLORS[1] },
+  { dir: 'south', hubIdx: 2, color: CIRCUIT_COLORS[2] },
+];
 
 let board       = null;
 let activeDir   = null;
@@ -190,8 +200,9 @@ function renderBoard() {
   requestAnimationFrame(drawCircuitLines);
 }
 
-// ── SVG circuit spokes ────────────────────────────────────────
-// EAST is the hub: one spoke per circuit from each of west/north/south → east.
+// ── SVG circuit bundles ───────────────────────────────────────
+// Each non-EAST direction: chain its 3 circuit nodes (0→1→2) inside the panel,
+// then ONE line from the last node → the designated EAST hub node.
 function drawCircuitLines() {
   const svg  = document.getElementById('eng-circuit-svg');
   const wrap = document.getElementById('eng-board');
@@ -204,51 +215,56 @@ function drawCircuitLines() {
   svg.setAttribute('width',  wrapRect.width);
   svg.setAttribute('height', wrapRect.height);
 
-  [0, 1, 2].forEach(nodeIdx => {
-    const color = CIRCUIT_COLORS[nodeIdx];
+  function nodeCenter(dir, idx) {
+    const el = document.getElementById(`node-${dir}-${idx}`);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      x: +(r.left - wrapRect.left + r.width  / 2).toFixed(1),
+      y: +(r.top  - wrapRect.top  + r.height / 2).toFixed(1),
+    };
+  }
 
-    // Hub: EAST node centre
-    const hubEl = document.getElementById(`node-east-${nodeIdx}`);
-    if (!hubEl) return;
-    const hr = hubEl.getBoundingClientRect();
-    const hx = +(hr.left - wrapRect.left + hr.width  / 2).toFixed(1);
-    const hy = +(hr.top  - wrapRect.top  + hr.height / 2).toFixed(1);
+  function svgLine(x1, y1, x2, y2, color, opacity, width) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1',             x1);
+    line.setAttribute('y1',             y1);
+    line.setAttribute('x2',             x2);
+    line.setAttribute('y2',             y2);
+    line.setAttribute('stroke',         color);
+    line.setAttribute('stroke-width',   width);
+    line.setAttribute('stroke-opacity', opacity);
+    line.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(line);
+  }
 
-    // One spoke from each of west / north / south → east hub
-    SPOKE_DIRS.forEach(dir => {
-      const el = document.getElementById(`node-${dir}-${nodeIdx}`);
-      if (!el) return;
-      const r  = el.getBoundingClientRect();
-      const x1 = +(r.left - wrapRect.left + r.width  / 2).toFixed(1);
-      const y1 = +(r.top  - wrapRect.top  + r.height / 2).toFixed(1);
+  function svgDot(cx, cy, color, r, opacity) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx',           cx);
+    c.setAttribute('cy',           cy);
+    c.setAttribute('r',            r);
+    c.setAttribute('fill',         color);
+    c.setAttribute('fill-opacity', opacity);
+    svg.appendChild(c);
+  }
 
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1',             x1);
-      line.setAttribute('y1',             y1);
-      line.setAttribute('x2',             hx);
-      line.setAttribute('y2',             hy);
-      line.setAttribute('stroke',         color);
-      line.setAttribute('stroke-width',   '2');
-      line.setAttribute('stroke-opacity', '0.5');
-      line.setAttribute('stroke-linecap', 'round');
-      svg.appendChild(line);
-    });
+  CIRCUIT_BUNDLES.forEach(({ dir, hubIdx, color }) => {
+    // Centres of the 3 circuit nodes within this direction's panel
+    const pts = [0, 1, 2].map(i => nodeCenter(dir, i));
+    if (pts.some(p => !p)) return;
 
-    // Subtle glow dot at each circuit node (all four directions)
-    DIRS.forEach(dir => {
-      const el = document.getElementById(`node-${dir}-${nodeIdx}`);
-      if (!el) return;
-      const r  = el.getBoundingClientRect();
-      const cx = +(r.left - wrapRect.left + r.width  / 2).toFixed(1);
-      const cy = +(r.top  - wrapRect.top  + r.height / 2).toFixed(1);
-      const c  = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      c.setAttribute('cx',           cx);
-      c.setAttribute('cy',           cy);
-      c.setAttribute('r',            '5');
-      c.setAttribute('fill',         color);
-      c.setAttribute('fill-opacity', '0.22');
-      svg.appendChild(c);
-    });
+    // ── Intra-panel: chain node 0 → 1 → 2 ──────────────────
+    svgLine(pts[0].x, pts[0].y, pts[1].x, pts[1].y, color, '0.42', '1.5');
+    svgLine(pts[1].x, pts[1].y, pts[2].x, pts[2].y, color, '0.42', '1.5');
+
+    // ── Inter-panel: exit from node 2 → EAST hub ───────────
+    const hub = nodeCenter('east', hubIdx);
+    if (!hub) return;
+    svgLine(pts[2].x, pts[2].y, hub.x, hub.y, color, '0.62', '2');
+
+    // ── Glow dots at each circuit node + EAST hub ───────────
+    pts.forEach(p => svgDot(p.x, p.y, color, '5', '0.22'));
+    svgDot(hub.x, hub.y, color, '6', '0.30');
   });
 }
 
