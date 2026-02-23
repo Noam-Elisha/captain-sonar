@@ -4,9 +4,9 @@
    SVG overlay draws circuits (C1/C2/C3):
      Intra-panel: chain the 3 circuit nodes within each non-EAST section.
      Inter-panel: ONE exit line per section → its designated EAST hub node.
-       WEST  bundle (C1, orange): W[0]─W[1]─W[2] → E[0]
-       NORTH bundle (C2, cyan):   N[0]─N[1]─N[2] → E[1]
-       SOUTH bundle (C3, pink):   S[0]─S[1]─S[2] → E[2]
+       SOUTH bundle (C3, pink):   S[0]─S[1]─S[2] → E[0] (yellow, left)
+       WEST  bundle (C1, orange): W[0]─W[1]─W[2] → E[1] (red,    mid)
+       NORTH bundle (C2, cyan):   N[0]─N[1]─N[2] → E[2] (green,  right)
    ============================================================ */
 
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
@@ -20,11 +20,13 @@ const CIRCUIT_COLORS = { 0: '#f97316', 1: '#06b6d4', 2: '#ec4899' };
 
 // Each non-EAST direction bundles its 3 circuit nodes (idx 0–2) into one chain,
 // then exits with ONE inter-panel line to the designated EAST hub node.
-// WEST → E[0] (C1, orange)  |  NORTH → E[1] (C2, cyan)  |  SOUTH → E[2] (C3, pink)
+// SOUTH → E[0] (yellow, left — adjacent to SOUTH, no crossover)
+// WEST  → E[1] (red,    mid)
+// NORTH → E[2] (green,  right — straight down from NORTH)
 const CIRCUIT_BUNDLES = [
-  { dir: 'west',  hubIdx: 0, color: CIRCUIT_COLORS[0] },
-  { dir: 'north', hubIdx: 1, color: CIRCUIT_COLORS[1] },
-  { dir: 'south', hubIdx: 2, color: CIRCUIT_COLORS[2] },
+  { dir: 'south', hubIdx: 0, color: CIRCUIT_COLORS[2] },
+  { dir: 'west',  hubIdx: 1, color: CIRCUIT_COLORS[0] },
+  { dir: 'north', hubIdx: 2, color: CIRCUIT_COLORS[1] },
 ];
 
 let board       = null;

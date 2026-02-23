@@ -561,7 +561,7 @@ def test_stealth_cannot_revisit():
     game["submarines"]["blue"]["systems"]["stealth"] = 4
     # Move east once normally, then try stealth back west through own trail
     gs.captain_move(game, "blue", "east")
-    gs.engineer_mark(game, "blue", "east", 0)
+    gs.engineer_mark(game, "blue", "east", 1)  # idx 1 = red (torpedo/mine), not yellow (stealth)
     gs.first_mate_charge(game, "blue", "torpedo")
     gs.end_turn(game, "blue")
     # Red's turn — force back to blue properly (active_team drives current_team())
