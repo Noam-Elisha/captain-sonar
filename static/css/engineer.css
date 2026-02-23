@@ -21,12 +21,12 @@
   user-select: none;
 }
 
-/* SVG circuit lines overlay */
+/* SVG circuit lines overlay — z-index 2 so traces appear above node columns */
 .circuit-svg {
   position: absolute;
   top: 0; left: 0;
   pointer-events: none;
-  z-index: 0;
+  z-index: 2;
   overflow: visible;
 }
 

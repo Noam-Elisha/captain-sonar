@@ -229,11 +229,18 @@ function renderEngBoard(id, board) {
   const el = document.getElementById(id);
   if (!el || !board) return;
   el.innerHTML = '';
+  el.style.position = 'relative'; // needed for SVG overlay
+
   const wrap = document.createElement('div');
   wrap.className = 'mini-eng';
+
+  // Track the 3 circuit node elements per direction for SVG line drawing
+  const circNodeEls = {};  // dir -> [el0, el1, el2]
+
   ENG_DIR_ORDER.forEach(dir => {
     const nodes = board[dir];
     if (!nodes) return;
+    circNodeEls[dir] = [];
     const col = document.createElement('div');
     col.className = 'mini-col';
     const lbl = document.createElement('div');
@@ -247,12 +254,56 @@ function renderEngBoard(id, board) {
         col.appendChild(div);
       }
       const dot = document.createElement('div');
-      dot.className = 'mini-node ' + node.color + (node.marked ? ' marked' : '');
+      dot.className = 'mini-node ' + node.color
+        + (node.marked   ? ' marked'             : '')
+        + (node.circuit  ? ` mini-circ-${node.circuit}` : '');
       col.appendChild(dot);
+      if (ni < 3) circNodeEls[dir].push(dot);  // indices 0-2 are circuit nodes
     });
     wrap.appendChild(col);
   });
+
   el.appendChild(wrap);
+
+  // Draw horizontal circuit traces after layout (requestAnimationFrame waits for paint)
+  const MINI_CC = { 1: '#f97316', 2: '#06b6d4', 3: '#ec4899' };
+  requestAnimationFrame(() => {
+    el.querySelectorAll('.mini-circ-svg').forEach(s => s.remove());
+    const elRect = el.getBoundingClientRect();
+    if (!elRect.width) return;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.className = 'mini-circ-svg';
+    svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2;overflow:visible;';
+    svg.setAttribute('width',  elRect.width);
+    svg.setAttribute('height', elRect.height);
+
+    [1, 2, 3].forEach(cid => {
+      const ci = cid - 1;  // node index 0-2
+      const pts = ENG_DIR_ORDER.map(dir => {
+        const nodeEl = circNodeEls[dir]?.[ci];
+        if (!nodeEl) return null;
+        const r = nodeEl.getBoundingClientRect();
+        return {
+          x: +(r.left - elRect.left + r.width  / 2).toFixed(1),
+          y: +(r.top  - elRect.top  + r.height / 2).toFixed(1),
+        };
+      }).filter(Boolean);
+      if (pts.length < 2) return;
+
+      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      poly.setAttribute('points',         pts.map(p => `${p.x},${p.y}`).join(' '));
+      poly.setAttribute('stroke',         MINI_CC[cid]);
+      poly.setAttribute('stroke-width',   '2.5');
+      poly.setAttribute('stroke-opacity', '0.75');
+      poly.setAttribute('fill',           'none');
+      poly.setAttribute('stroke-linecap', 'round');
+      poly.setAttribute('stroke-linejoin','round');
+      svg.appendChild(poly);
+    });
+
+    el.appendChild(svg);
+  });
 }
 
 // ── Move log ──────────────────────────────────────────────────────────────────

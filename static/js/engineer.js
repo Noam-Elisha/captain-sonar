@@ -294,8 +294,8 @@ function drawCircuitLines() {
     const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
     poly.setAttribute('points',         pts.map(p => `${p.x},${p.y}`).join(' '));
     poly.setAttribute('stroke',         CIRCUIT_COLORS[cid]);
-    poly.setAttribute('stroke-width',   '3.5');
-    poly.setAttribute('stroke-opacity', '0.60');
+    poly.setAttribute('stroke-width',   '4');
+    poly.setAttribute('stroke-opacity', '0.80');
     poly.setAttribute('fill',           'none');
     poly.setAttribute('stroke-linecap', 'round');
     poly.setAttribute('stroke-linejoin','round');

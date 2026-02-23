@@ -170,43 +170,52 @@
 /* ── Mini engineering board ───────────────────────────────────── */
 .mini-eng {
   display: flex;
-  gap: 4px;
+  gap: 0;
   flex-wrap: nowrap;
   justify-content: space-between;
+  position: relative;   /* SVG overlay positions within here */
 }
 .mini-col {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  position: relative;
+  z-index: 1;           /* nodes sit above the SVG trace lines */
 }
 .mini-col-lbl {
-  font-size: .58rem;
+  font-size: .6rem;
   color: var(--text-muted);
   letter-spacing: .03em;
   line-height: 1;
-  margin-bottom: 1px;
+  margin-bottom: 2px;
 }
 .mini-node {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.15);
   transition: background .2s, border-color .2s;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
-.mini-node.red        { background: rgba(239,68,68,.15);  border-color: rgba(239,68,68,.3); }
-.mini-node.green      { background: rgba(34,197,94,.15);  border-color: rgba(34,197,94,.3); }
-.mini-node.yellow     { background: rgba(234,179,8,.15);  border-color: rgba(234,179,8,.3); }
-.mini-node.radiation  { background: rgba(168,85,247,.15); border-color: rgba(168,85,247,.3); }
-.mini-node.red.marked        { background: var(--col-red);    border-color: var(--col-red); }
-.mini-node.green.marked      { background: var(--col-green);  border-color: var(--col-green); }
-.mini-node.yellow.marked     { background: var(--col-yellow); border-color: var(--col-yellow); }
-.mini-node.radiation.marked  { background: var(--col-radiation); border-color: var(--col-radiation); }
+.mini-node.red        { background: rgba(239,68,68,.18);  border-color: rgba(239,68,68,.40); }
+.mini-node.green      { background: rgba(34,197,94,.18);  border-color: rgba(34,197,94,.40); }
+.mini-node.yellow     { background: rgba(234,179,8,.18);  border-color: rgba(234,179,8,.40); }
+.mini-node.radiation  { background: rgba(168,85,247,.18); border-color: rgba(168,85,247,.40); }
+.mini-node.red.marked        { background: var(--col-red);    border-color: var(--col-red);    box-shadow: 0 0 4px var(--col-red); }
+.mini-node.green.marked      { background: var(--col-green);  border-color: var(--col-green);  box-shadow: 0 0 4px var(--col-green); }
+.mini-node.yellow.marked     { background: var(--col-yellow); border-color: var(--col-yellow); box-shadow: 0 0 4px var(--col-yellow); }
+.mini-node.radiation.marked  { background: var(--col-radiation); border-color: var(--col-radiation); box-shadow: 0 0 4px var(--col-radiation); }
+/* Circuit ring — matches the three circuit trace colours */
+.mini-node.mini-circ-1 { outline: 1.5px solid rgba(249,115,22,.70); outline-offset: 1px; }
+.mini-node.mini-circ-2 { outline: 1.5px solid rgba(6,182,212,.70);  outline-offset: 1px; }
+.mini-node.mini-circ-3 { outline: 1.5px solid rgba(236,72,153,.70); outline-offset: 1px; }
 .mini-reactor-div {
   width: 100%;
-  border-top: 1px dashed rgba(255,255,255,.1);
-  margin: 1px 0;
+  border-top: 1px dashed rgba(255,255,255,.12);
+  margin: 2px 0;
 }
 
 /* ── Move log tags ────────────────────────────────────────────── */
