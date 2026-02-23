@@ -158,10 +158,8 @@
   box-shadow: 0 0 9px var(--node-col);
 }
 
-/* ── Circuit ring outlines (C1 / C2 / C3) ────────────────── */
-.eng-node.circuit-1 { outline: 2px solid rgba(249, 115,  22, .65); outline-offset: 2px; }
-.eng-node.circuit-2 { outline: 2px solid rgba(  6, 182, 212, .65); outline-offset: 2px; }
-.eng-node.circuit-3 { outline: 2px solid rgba(236,  72, 153, .65); outline-offset: 2px; }
+/* Circuit ring outlines removed — node fill color alone identifies the system.
+   Circuit membership is shown only via the small C1/C2/C3 badge text. */
 
 /* ── Clickable glow + pulse ───────────────────────────────── */
 .eng-node.clickable {

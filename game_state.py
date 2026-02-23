@@ -96,9 +96,9 @@ ENGINEERING_LAYOUT = {
 # circuit_id → list of (direction, index) pairs – each circuit spans all 4 directions
 # Node colors vary per direction (see ENGINEERING_LAYOUT above).
 CIRCUITS = {
-    1: [("north", 0), ("south", 0), ("east", 0), ("west", 0)],  # C1: N=yellow, S=green,  E=red,   W=red
-    2: [("north", 1), ("south", 1), ("east", 1), ("west", 1)],  # C2: N=red,    S=yellow, E=green, W=green
-    3: [("north", 2), ("south", 2), ("east", 2), ("west", 2)],  # C3: N=yellow, S=red,    E=yellow,W=yellow
+    1: [("north", 0), ("south", 0), ("east", 0), ("west", 0)],  # C1: N=yellow, S=green,  E=yellow, W=red
+    2: [("north", 1), ("south", 1), ("east", 1), ("west", 1)],  # C2: N=red,    S=yellow, E=red,    W=green
+    3: [("north", 2), ("south", 2), ("east", 2), ("west", 2)],  # C3: N=yellow, S=red,    E=green,  W=yellow
 }
 
 # Radiation node positions (one per direction = 4 total)
@@ -152,10 +152,12 @@ def engineer_mark_node(board, direction, index):
     Mark node at (direction, index).
     Returns a list of events: [{"type": ..., ...}]
 
-    RULEBOOK:
-    - Circuit completed (C1/C2/C3) → clear those 4 nodes only, no damage.
-    - Direction overload (all 6 nodes in one section) → 1 damage + clear ENTIRE board.
-    - Radiation overload (all 4 radiation nodes) → 1 damage + clear ENTIRE board.
+    RULEBOOK check order (priority high → low):
+    1. Direction overload: all 6 nodes in one section marked → 1 damage + clear ENTIRE board.
+       Overload fires BEFORE circuit repair — filling the section always causes damage.
+       Circuit repair is a preventive mechanic (avoid filling the section), not a reactive one.
+    2. Radiation overload: all 4 radiation nodes marked → 1 damage + clear ENTIRE board.
+    3. Circuit completed (C1/C2/C3): clear those 4 nodes only, no damage.
     """
     if board[direction][index]["marked"]:
         return [{"type": "error", "msg": "Node already marked"}]
@@ -163,7 +165,24 @@ def engineer_mark_node(board, direction, index):
     board[direction][index]["marked"] = True
     events = []
 
-    # Check circuits first (circuit completion clears only circuit nodes, no damage)
+    # ── 1. Direction overload (checked FIRST per rulebook priority) ───────────
+    # If all 6 nodes in this section are now marked, the section is overloaded.
+    # This takes priority over circuit completion — filling the board always damages.
+    if all(n["marked"] for n in board[direction]):
+        clear_engineering_board(board)
+        events.append({"type": "direction_damage", "direction": direction, "damage": 1})
+        return events   # overload fired; radiation / circuit checks moot after full clear
+
+    # ── 2. Radiation overload ─────────────────────────────────────────────────
+    total_radiation = sum(
+        1 for d, i in RADIATION_NODES if board[d][i]["marked"]
+    )
+    if total_radiation >= len(RADIATION_NODES):
+        clear_engineering_board(board)
+        events.append({"type": "radiation_damage", "damage": 1})
+        return events   # circuit check moot after full clear
+
+    # ── 3. Circuit completion (self-repair, no damage) ────────────────────────
     circuit_id = board[direction][index]["circuit"]
     if circuit_id is not None:
         circuit_nodes = CIRCUITS[circuit_id]
@@ -171,22 +190,6 @@ def engineer_mark_node(board, direction, index):
             for d, i in circuit_nodes:
                 board[d][i]["marked"] = False
             events.append({"type": "circuit_cleared", "circuit": circuit_id})
-
-    # Check radiation (after circuit processing, so cleared circuit nodes don't count)
-    total_radiation = sum(
-        1 for d, i in RADIATION_NODES if board[d][i]["marked"]
-    )
-    if total_radiation >= len(RADIATION_NODES):
-        # RULEBOOK: clear ENTIRE board on radiation damage
-        clear_engineering_board(board)
-        events.append({"type": "radiation_damage", "damage": 1})
-        return events   # direction overload can't fire after full clear
-
-    # Check direction overload (all 6 nodes in current direction filled → damage + clear ALL)
-    if all(n["marked"] for n in board[direction]):
-        # RULEBOOK: clear ENTIRE board on direction damage
-        clear_engineering_board(board)
-        events.append({"type": "direction_damage", "direction": direction, "damage": 1})
 
     return events
 
