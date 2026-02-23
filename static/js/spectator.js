@@ -78,12 +78,41 @@ socket.on('stealth_announced', data => {
 });
 
 socket.on('damage', data => {
-  const cause = data.cause === 'system_failure' ? ' (system failure)' : '';
+  const cause = data.cause === 'system_failure' ? ' (system failure)'
+              : data.cause === 'surface'         ? ' (surfaced)'      : '';
   logEvent(`💥 [${data.team.toUpperCase()}] took ${data.amount} damage${cause} (${data.health} HP remain)`, 'danger');
 });
 
-socket.on('sonar_announced',  data => logEvent(`📡 [${data.team.toUpperCase()}] used sonar`));
-socket.on('drone_announced',  data => logEvent(`🛸 [${data.team.toUpperCase()}] drone → sector ${data.sector}`));
+socket.on('sonar_announced', data => logEvent(`📡 [${data.team.toUpperCase()}] used sonar`));
+socket.on('drone_announced', data => logEvent(`🛸 [${data.team.toUpperCase()}] drone → sector ${data.sector}`));
+
+socket.on('sonar_result', data => {
+  const fmtVal = (type, val) => {
+    if (type === 'row') return `Row ${val + 1}`;
+    if (type === 'col') return `Col ${val + 1}`;
+    return `Sector ${val}`;
+  };
+  const t = data.target;
+  logEvent(
+    `📡 [${t.toUpperCase()}] sonar: enemy replied "${fmtVal(data.type1, data.val1)}" & "${fmtVal(data.type2, data.val2)}" (1 true, 1 false)`,
+    t === 'blue' ? 'blue' : 'red'
+  );
+});
+
+socket.on('drone_result', data => {
+  const t = data.target;
+  const result = data.in_sector ? 'YES 🎯' : 'NO — clear';
+  logEvent(`🛸 [${t.toUpperCase()}] drone sector ${data.ask_sector}: ${result}`, t === 'blue' ? 'blue' : 'red');
+});
+
+// RO pan relay — sync the radio operator's pan position onto their canvas overlay
+socket.on('ro_pan', data => {
+  const layer = roCanvases[data.team];
+  if (!layer || !layer.canvas) return;
+  const dx = data.ox * layer.canvas.width;
+  const dy = data.oy * layer.canvas.height;
+  layer.canvas.style.transform = `translate(${dx}px, ${dy}px)`;
+});
 
 socket.on('turn_start', data => { setTurnBadge(data.team); });
 

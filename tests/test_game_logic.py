@@ -233,8 +233,9 @@ def test_surface_clears_trail():
     gs.engineer_mark(game, "blue", "east", 0)
     gs.first_mate_charge(game, "blue", "torpedo")
     gs.end_turn(game, "blue")
-    # Red's turn — skip it
-    game["turn_index"] += 1
+    # Red's turn — force back to blue without using broken turn_index hack
+    game["active_team"] = "blue"
+    game["turn_state"] = gs.make_turn_state()
     # Now surface blue
     gs.captain_surface(game, "blue")
     trail = game["submarines"]["blue"]["trail"]
@@ -402,6 +403,7 @@ def test_fm_system_ready_at_max():
 def test_torpedo_direct_hit_2_damage():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(5,6))
     game["submarines"]["blue"]["systems"]["torpedo"] = 3
+    game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, events = gs.captain_fire_torpedo(game, "blue", 5, 6)
     assert ok, msg
     dmg = next(e for e in events if e["type"] == "damage")
@@ -410,18 +412,22 @@ def test_torpedo_direct_hit_2_damage():
 
 
 def test_torpedo_adjacent_1_damage():
-    """Torpedo at manhattan distance 1 deals 1 damage."""
-    game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(5,5))
+    """Torpedo Chebyshev distance 1 from target deals 1 damage."""
+    # blue at (5,4), red at (5,6), fire at (5,5)
+    # Red: Chebyshev dist from (5,5) to (5,6) = 1 → 1 damage
+    game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(5,6))
     game["submarines"]["blue"]["systems"]["torpedo"] = 3
+    game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, events = gs.captain_fire_torpedo(game, "blue", 5, 5)
     assert ok, msg
-    dmg = next(e for e in events if e["type"] == "damage")
+    dmg = next(e for e in events if e["type"] == "damage" and e["team"] == "red")
     assert dmg["amount"] == 1
 
 
 def test_torpedo_out_of_range():
     game = place_both(fresh_game(), blue_pos=(0,0), red_pos=(0,5))
     game["submarines"]["blue"]["systems"]["torpedo"] = 3
+    game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, _ = gs.captain_fire_torpedo(game, "blue", 0, 5)
     assert not ok
     assert "range" in msg.lower()
@@ -429,6 +435,7 @@ def test_torpedo_out_of_range():
 
 def test_torpedo_not_charged():
     game = place_both(fresh_game())
+    game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, _ = gs.captain_fire_torpedo(game, "blue", 5, 5)
     assert not ok
     assert "charged" in msg.lower()
@@ -438,6 +445,7 @@ def test_game_over_when_health_zero():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(5,6))
     game["submarines"]["red"]["health"] = 2
     game["submarines"]["blue"]["systems"]["torpedo"] = 3
+    game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, _, events = gs.captain_fire_torpedo(game, "blue", 5, 6)
     assert ok
     game_over = next((e for e in events if e["type"] == "game_over"), None)
@@ -453,6 +461,7 @@ def test_game_over_when_health_zero():
 def test_mine_place_adjacent():
     game = place_both(fresh_game(), blue_pos=(5,4))
     game["submarines"]["blue"]["systems"]["mine"] = 3
+    game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, _ = gs.captain_place_mine(game, "blue", 5, 5)
     assert ok, msg
     assert [5, 5] in game["submarines"]["blue"]["mines"]
@@ -468,11 +477,13 @@ def test_mine_place_non_adjacent_rejected():
 def test_mine_detonate_deals_damage():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(5,6))
     game["submarines"]["blue"]["systems"]["mine"] = 3
+    game["turn_state"]["moved"] = True   # TBT: systems activate after course announced
     gs.captain_place_mine(game, "blue", 5, 5)
+    # Detonate the mine just placed at index 0
+    # Red at (5,6): Chebyshev distance from (5,5) to (5,6) = 1 → 1 damage
     ok, msg, events = gs.captain_detonate_mine(game, "blue", 0)
     assert ok, msg
-    # Red is adjacent to (5,5) so should take 1 damage
-    dmg = next((e for e in events if e["type"] == "damage"), None)
+    dmg = next((e for e in events if e["type"] == "damage" and e["team"] == "red"), None)
     assert dmg is not None
 
 
@@ -490,18 +501,23 @@ def test_stealth_valid():
 
 
 def test_stealth_sets_eng_fm_done():
+    """Stealth does NOT auto-set engineer/FM done — they still must act."""
     game = place_both(fresh_game(), blue_pos=(5,4))
     game["submarines"]["blue"]["systems"]["stealth"] = 5
     gs.captain_use_stealth(game, "blue", "east", 1)
-    assert game["turn_state"]["engineer_done"] == True
-    assert game["turn_state"]["first_mate_done"] == True
+    # Rulebook: engineer marks silently in stealth direction; FM charges one system
+    assert game["turn_state"]["engineer_done"] == False
+    assert game["turn_state"]["first_mate_done"] == False
 
 
 def test_stealth_no_direction_set():
-    """Stealth doesn't set direction so end_turn allowed without wait."""
+    """After stealth, engineer marks stealth dir and FM charges before end turn."""
     game = place_both(fresh_game(), blue_pos=(5,4))
     game["submarines"]["blue"]["systems"]["stealth"] = 5
     gs.captain_use_stealth(game, "blue", "east", 1)
+    # Engineer marks in the (private) stealth direction; FM charges a system
+    gs.engineer_mark(game, "blue", "east", 0)
+    gs.first_mate_charge(game, "blue", "torpedo")
     ok, msg, _ = gs.end_turn(game, "blue")
     assert ok, msg
 
@@ -525,7 +541,7 @@ def test_stealth_straight_line_only():
 
 
 def test_stealth_zero_steps():
-    """Stealth with 0 steps is valid (stay in place, but clear trail)."""
+    """Stealth with 0 steps is valid (stay in place); eng+FM must still act."""
     game = place_both(fresh_game(), blue_pos=(5,4))
     game["submarines"]["blue"]["systems"]["stealth"] = 5
     ok, msg, events = gs.captain_use_stealth(game, "blue", "east", 0)
@@ -533,9 +549,9 @@ def test_stealth_zero_steps():
     # Position unchanged
     pos = game["submarines"]["blue"]["position"]
     assert pos == [5, 4]
-    # eng_done + first_mate_done set
-    assert game["turn_state"]["engineer_done"] == True
-    assert game["turn_state"]["first_mate_done"] == True
+    # Stealth does NOT auto-set eng/FM done — they must still mark/charge
+    assert game["turn_state"]["engineer_done"] == False
+    assert game["turn_state"]["first_mate_done"] == False
 
 
 def test_stealth_cannot_revisit():
@@ -547,8 +563,9 @@ def test_stealth_cannot_revisit():
     gs.engineer_mark(game, "blue", "east", 0)
     gs.first_mate_charge(game, "blue", "torpedo")
     gs.end_turn(game, "blue")
-    # Red's turn — advance past it
-    game["turn_index"] += 1
+    # Red's turn — force back to blue properly (active_team drives current_team())
+    game["active_team"] = "blue"
+    game["turn_state"] = gs.make_turn_state()
     # Blue stealth west would pass through (5,4) which is in trail
     game["submarines"]["blue"]["systems"]["stealth"] = 5
     ok, msg, _ = gs.captain_use_stealth(game, "blue", "west", 2)
@@ -563,19 +580,23 @@ def test_stealth_cannot_revisit():
 def test_sonar_result_has_correct_format():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(10,10))
     game["submarines"]["blue"]["systems"]["sonar"] = 3
-    ok, msg, events = gs.captain_use_sonar(game, "blue", 10, 10, 5)
+    game["turn_state"]["moved"] = True   # TBT: system used after announcing course
+    ok, msg, events = gs.captain_use_sonar(game, "blue")
     assert ok, msg
-    # Should produce some sonar-related events
+    # Should produce sonar-related events (sonar_activated)
     assert len(events) > 0
 
 
 def test_drone_result_boolean():
     game = place_both(fresh_game(), blue_pos=(5,4), red_pos=(10,10))
     game["submarines"]["blue"]["systems"]["drone"] = 4
+    game["turn_state"]["moved"] = True   # TBT: system used after announcing course
     ok, msg, events = gs.captain_use_drone(game, "blue", 5)
     assert ok, msg
-    # Should produce drone-related events
-    assert len(events) > 0
+    # Should produce drone-related events (drone_result with in_sector bool)
+    drone_ev = next((e for e in events if e["type"] == "drone_result"), None)
+    assert drone_ev is not None
+    assert isinstance(drone_ev["in_sector"], bool)
 
 
 # ────────────────────────────────────────────────────────────────────────────

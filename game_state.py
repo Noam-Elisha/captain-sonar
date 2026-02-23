@@ -31,7 +31,7 @@ Torpedo range: Manhattan distance ≤ 4.
   Direct hit (same cell): 2 damage.   Adjacent (distance 1): 1 damage.
 
 Surface: clear trail + entire engineering board, announce sector.
-  NO inherent damage from surfacing.  Enemy team gets 3 free turns.
+  Costs 1 HP damage (both voluntary and blackout).  Enemy team gets 3 free turns.
   Captain must DIVE before moving again.
 
 Silence (Stealth): move 0-4 spaces in ONE straight line silently.
@@ -349,8 +349,8 @@ def captain_surface(game, team):
     """
     Surface the submarine. Returns (ok, error_msg, events).
 
-    RULEBOOK:
-    - NO inherent damage from surfacing.
+    RULEBOOK (TBT mode):
+    - Surfacing costs 1 HP (applies to both voluntary and forced/blackout surfacing).
     - Clears trail (keeps current position) + clears ENTIRE engineering board.
     - Announces sector to all.
     - Enemy team gets 3 free turns (surface bonus).
@@ -368,7 +368,8 @@ def captain_surface(game, team):
     r, c = sub["position"]
     sector = get_sector(r, c, game["map"]["sector_size"], game["map"]["cols"])
 
-    # No damage from surfacing (rulebook)
+    # RULEBOOK: surfacing costs 1 HP damage
+    sub["health"] -= 1
     sub["trail"] = [[r, c]]   # clear trail (keep current position)
     sub["surfaced"] = True
 
@@ -379,13 +380,22 @@ def captain_surface(game, team):
     enemy = other_team(team)
     game["surface_bonus"] = {"for_team": enemy, "turns_remaining": 3}
 
-    events = [{"type": "surfaced", "team": team, "sector": sector, "health": sub["health"]}]
+    events = [
+        {"type": "damage",   "team": team, "amount": 1, "health": sub["health"],
+         "cause": "surface"},
+        {"type": "surfaced", "team": team, "sector": sector, "health": sub["health"]},
+    ]
     game["log"].append({"type": "surface", "team": team, "sector": sector})
 
     game["turn_state"]["moved"] = True
     game["turn_state"]["direction"] = None
     game["turn_state"]["engineer_done"] = True   # no engineering needed when surfacing
     game["turn_state"]["first_mate_done"] = True  # no charging when surfacing
+
+    # Check if surfacing killed the sub (e.g. surfacing at 1 HP)
+    result = _check_game_over(game)
+    if result:
+        events.append(result)
 
     return True, None, events
 

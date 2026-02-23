@@ -79,10 +79,38 @@ socket.on('torpedo_fired', data => {
 });
 
 socket.on('sonar_announced', data => {
-  if (data.team === ENEMY_TEAM) logEvent('Enemy used sonar on us');
+  if (data.team === ENEMY_TEAM) logEvent('📡 Enemy used sonar on us — our captain must respond', 'warning');
+  else logEvent('📡 We used sonar — waiting for enemy captain to respond');
 });
+
 socket.on('drone_announced', data => {
-  if (data.team === ENEMY_TEAM) logEvent(`Enemy scanned sector ${data.sector} with drone`);
+  if (data.team === ENEMY_TEAM) logEvent(`🛸 Enemy scanned sector ${data.sector} with drone`);
+  else logEvent(`🛸 We scanned sector ${data.sector} with drone`);
+});
+
+// Broadcast results — both teams hear these in the physical game
+socket.on('sonar_result', data => {
+  const fmtVal = (type, val) => {
+    if (type === 'row') return `Row ${val + 1}`;
+    if (type === 'col') return `Col ${val + 1}`;
+    return `Sector ${val}`;
+  };
+  const info1 = fmtVal(data.type1, data.val1);
+  const info2 = fmtVal(data.type2, data.val2);
+  if (data.target === MY_TEAM) {
+    logEvent(`📡 Sonar result: enemy said "${info1}" AND "${info2}" (deduce which is true!)`, 'highlight');
+  } else {
+    logEvent(`📡 Enemy sonar on us — we said "${info1}" and "${info2}"`);
+  }
+});
+
+socket.on('drone_result', data => {
+  const result = data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear';
+  if (data.target === MY_TEAM) {
+    logEvent(`🛸 Drone sector ${data.ask_sector}: ${result}`, 'highlight');
+  } else {
+    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${result}`);
+  }
 });
 
 socket.on('damage', data => {
@@ -208,7 +236,16 @@ function onMouseMove(e) {
   if (currentTool === 'pan' && isPanning) {
     panOffsetX = e.clientX - panStartX;
     panOffsetY = e.clientY - panStartY;
-    canvas.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
+    // Translate the whole map-wrapper (map-grid + canvas together) so drawings stay aligned
+    const wrapper = canvas.parentElement;
+    wrapper.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px)`;
+    // Relay pan to spectators (normalized to canvas size so it scales correctly)
+    socket.emit('ro_pan', {
+      game_id: GAME_ID,
+      team:    MY_TEAM,
+      ox:      panOffsetX / canvas.width,
+      oy:      panOffsetY / canvas.height,
+    });
     return;
   }
   if (!isDrawing) return;
@@ -251,7 +288,10 @@ function onMouseUp() {
   isDrawing    = false;
   isPanning    = false;
   strokeBuffer = null;
-  if (currentTool === 'pan') canvas.style.cursor = 'grab';
+  if (currentTool === 'pan') {
+    canvas.style.cursor = 'grab';
+    // Pan offset persists so the map stays panned
+  }
 }
 
 function setTool(tool) {

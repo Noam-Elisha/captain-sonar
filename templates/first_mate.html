@@ -30,8 +30,8 @@
 <div id="drone-modal" class="modal hidden">
   <div class="modal-card">
     <h3>🛸 Drone Scan</h3>
-    <p>Which sector do you think the enemy is in?</p>
-    <div class="sector-grid" id="drone-sectors"></div>
+    <p>Click the sector you think the enemy is in:</p>
+    <canvas id="drone-map-canvas"></canvas>
     <div class="modal-btns"><button class="btn-cancel" onclick="closeDrone()">Cancel</button></div>
   </div>
 </div>
@@ -72,6 +72,9 @@
   const MY_TEAM   = "{{ team }}";
   const MAP_ROWS  = {{ map_rows }};
   const MAP_COLS  = {{ map_cols }};
+  const SECTOR_SZ = {{ sector_size }};
+  const ISLANDS   = {{ islands | tojson }};
+  const COL_LABELS= {{ col_labels | tojson }};
 </script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="/static/js/first_mate.js"></script>

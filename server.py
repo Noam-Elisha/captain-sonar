@@ -218,12 +218,13 @@ def _dispatch_events(game_id, game, events):
                 _bot_sonar_respond(game_id, game, enemy, enemy_cap)
 
         elif t == "sonar_result":
-            # Result goes to the activating team's captain + first_mate
+            # RULEBOOK: sonar result is public — both teams hear what the enemy captain said.
+            # Broadcast to whole room; each client checks data.target to determine role.
             target = ev["target"]
             result_data = {"type1": ev["type1"], "val1": ev["val1"],
-                           "type2": ev["type2"], "val2": ev["val2"]}
-            _emit_to_team_role(game_id, target, "captain",    "sonar_result", result_data)
-            _emit_to_team_role(game_id, target, "first_mate", "sonar_result", result_data)
+                           "type2": ev["type2"], "val2": ev["val2"],
+                           "target": target}
+            socketio.emit("sonar_result", result_data, room=game_id)
             _emit_to_team_role(game_id, target, "first_mate", "systems_update",
                                 {"systems": game["submarines"][target]["systems"]})
             # Update captain bot sonar knowledge
@@ -236,10 +237,14 @@ def _dispatch_events(game_id, game, events):
                           room=game_id)
 
         elif t == "drone_result":
-            # Result goes to first_mate (drone is operated by first mate)
-            _emit_to_team_role(game_id, ev["target"], "first_mate", "drone_result",
-                                {"in_sector": ev["in_sector"],
-                                 "ask_sector": ev.get("ask_sector", 0)})
+            # RULEBOOK: drone result is announced publicly — both teams hear it.
+            # Broadcast to whole room; each client checks data.target to determine role.
+            result_data = {
+                "in_sector":  ev["in_sector"],
+                "ask_sector": ev.get("ask_sector", 0),
+                "target":     ev["target"],   # activating team
+            }
+            socketio.emit("drone_result", result_data, room=game_id)
             _emit_to_team_role(game_id, ev["target"], "first_mate", "systems_update",
                                 {"systems": game["submarines"][ev["target"]]["systems"]})
             # Update captain bot drone knowledge (internal bot state only)
@@ -1532,6 +1537,17 @@ def on_ro_canvas_stroke(data):
     for spec in _get_spectators(game_id).values():
         if spec.get("sid"):
             socketio.emit("ro_canvas_stroke", data, room=spec["sid"])
+
+
+@socketio.on("ro_pan")
+def on_ro_pan(data):
+    """Radio operator pan offset — relay to spectators so they can sync the RO canvas overlay."""
+    game_id = (data.get("game_id") or "").upper()
+    if game_id not in games:
+        return
+    for spec in _get_spectators(game_id).values():
+        if spec.get("sid"):
+            socketio.emit("ro_pan", data, room=spec["sid"])
 
 
 # ── Auto-advance helper ───────────────────────────────────────────────────────

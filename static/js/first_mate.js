@@ -75,7 +75,7 @@ socket.on('turn_start', data => {
   renderSystems();
   if (data.team !== MY_TEAM) {
     document.getElementById('charge-overlay').classList.remove('hidden');
-    logEvent(`${data.team} team's turn`);
+    // Don't clutter the log with "X team's turn" every turn
   } else {
     document.getElementById('charge-overlay').classList.add('hidden');
     logEvent('OUR TURN — wait for captain to move, then charge', 'highlight');
@@ -86,16 +86,18 @@ socket.on('damage', data => {
   if (data.team === MY_TEAM) {
     myHealth = data.health;
     renderHealth();
-    const cause = data.cause === 'system_failure' ? '⚡ System failure! ' : '💥 ';
+    const cause = data.cause === 'system_failure' ? '⚡ System failure! '
+                : data.cause === 'surface'         ? '🌊 Surfaced! '      : '💥 ';
     logEvent(`${cause}We took ${data.amount} damage (${data.health} HP)`, 'danger');
   } else {
-    const cause = data.cause === 'system_failure' ? '⚡ Enemy system failure ' : '💥 Enemy took ';
+    const cause = data.cause === 'system_failure' ? '⚡ Enemy system failure '
+                : data.cause === 'surface'         ? '🌊 Enemy surfaced! '  : '💥 Enemy took ';
     logEvent(`${cause}${data.amount} damage`, 'danger');
   }
 });
 
 socket.on('surface_announced', data => {
-  // RULEBOOK: no damage from surfacing
+  // RULEBOOK: surfacing costs 1 HP (announced via damage event), enemy gets 3 bonus turns
   if (data.team === MY_TEAM) {
     logEvent(`You surfaced in sector ${data.sector} — trail + engineering cleared. Enemy gets 3 bonus turns!`, 'warning');
   } else {
@@ -112,6 +114,7 @@ socket.on('sonar_announced', data => {
 });
 
 // RULEBOOK sonar_result: 2 pieces of info from enemy captain (1 true, 1 false)
+// Broadcast to whole room — use data.target to determine if we are the activating team
 socket.on('sonar_result', data => {
   const fmtVal = (type, val) => {
     if (type === 'row') return `Row ${val + 1}`;
@@ -120,10 +123,16 @@ socket.on('sonar_result', data => {
   };
   const info1 = fmtVal(data.type1, data.val1);
   const info2 = fmtVal(data.type2, data.val2);
-  showToast(`Sonar: "${info1}" and "${info2}" — 1 is true, 1 is false!`);
-  logEvent(`📡 Sonar: enemy said "${info1}" AND "${info2}" (one is true, one is false — deduce!)`, 'highlight');
-  systemUsed = true;
-  renderSystems();
+  if (data.target === MY_TEAM) {
+    // Our sonar — enemy captain responded with these values
+    showToast(`Sonar: "${info1}" and "${info2}" — 1 is true, 1 is false!`);
+    logEvent(`📡 Sonar: enemy said "${info1}" AND "${info2}" (one is true, one is false — deduce!)`, 'highlight');
+    systemUsed = true;
+    renderSystems();
+  } else {
+    // Enemy sonar — they reported these values (both teams hear the result)
+    logEvent(`📡 Enemy sonar result: they reported "${info1}" and "${info2}"`);
+  }
 });
 
 // RULEBOOK blackout: no valid moves → auto-surface
@@ -142,11 +151,18 @@ socket.on('circuit_cleared', data => {
   }
 });
 
+// Broadcast to whole room — use data.target to determine if we are the activating team
 socket.on('drone_result', data => {
-  showToast(data.in_sector ? `Drone: Enemy IS in sector ${data.ask_sector}! 🎯` : `Drone: Enemy NOT in sector ${data.ask_sector}`);
-  logEvent(`🛸 Drone → sector ${data.ask_sector}: ${data.in_sector ? 'YES' : 'NO'}`, 'highlight');
-  systemUsed = true;
-  renderSystems();
+  if (data.target === MY_TEAM) {
+    // Our drone result
+    showToast(data.in_sector ? `🛸 Drone: Enemy IS in sector ${data.ask_sector}! 🎯` : `🛸 Drone: Enemy NOT in sector ${data.ask_sector}`);
+    logEvent(`🛸 Drone sector ${data.ask_sector}: ${data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear'}`, 'highlight');
+    systemUsed = true;
+    renderSystems();
+  } else {
+    // Enemy drone (we hear the result too — both teams hear in physical game)
+    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${data.in_sector ? 'contact on us!' : 'clear'}`);
+  }
 });
 
 socket.on('game_over', data => {
@@ -272,19 +288,93 @@ function submitSonar() {
 
 // ── Drone ─────────────────────────────────────────────────────
 function openDrone() {
-  const sGrid = document.getElementById('drone-sectors');
-  sGrid.innerHTML = '';
-  // RULEBOOK: TBT mode uses 4 sectors (2×2 quadrant layout: top-left/right, bottom-left/right)
-  const sectorLabels = {1: '1 (top-left)', 2: '2 (top-right)', 3: '3 (bottom-left)', 4: '4 (bottom-right)'};
-  for (let s = 1; s <= 4; s++) {
-    const btn       = document.createElement('button');
-    btn.textContent = sectorLabels[s];
-    btn.onclick     = () => submitDrone(s);
-    sGrid.appendChild(btn);
-  }
   document.getElementById('drone-modal').classList.remove('hidden');
+  renderDroneMap();
 }
-function closeDrone()     { document.getElementById('drone-modal').classList.add('hidden'); }
+
+function renderDroneMap() {
+  const canvas = document.getElementById('drone-map-canvas');
+  if (!canvas) return;
+
+  const MINI_PX = 10; // pixels per map cell in the mini-map
+  const totalW  = MAP_COLS * MINI_PX;
+  const totalH  = MAP_ROWS * MINI_PX;
+  canvas.width  = totalW;
+  canvas.height = totalH;
+  canvas.style.width  = Math.min(totalW, 280) + 'px';
+  canvas.style.height = Math.round(totalH * Math.min(totalW, 280) / totalW) + 'px';
+  canvas.style.imageRendering = 'pixelated';
+  canvas.style.cursor = 'pointer';
+  canvas.style.border = '1px solid rgba(148,163,184,.3)';
+  canvas.style.borderRadius = '4px';
+  canvas.style.display = 'block';
+  canvas.style.margin = '0 auto .5rem';
+
+  const ctx = canvas.getContext('2d');
+  const spr = Math.ceil(MAP_COLS / SECTOR_SZ);  // sectors per row
+  const spc = Math.ceil(MAP_ROWS / SECTOR_SZ);  // sectors per col
+  const islandSet = (typeof ISLANDS !== 'undefined')
+    ? new Set(ISLANDS.map(([r, c]) => `${r},${c}`))
+    : new Set();
+
+  // Draw water/island cells
+  for (let r = 0; r < MAP_ROWS; r++) {
+    for (let c = 0; c < MAP_COLS; c++) {
+      ctx.fillStyle = islandSet.has(`${r},${c}`) ? '#475569' : '#0f172a';
+      ctx.fillRect(c * MINI_PX, r * MINI_PX, MINI_PX, MINI_PX);
+    }
+  }
+
+  // Sector color palette
+  const PALETTE = [
+    'rgba(99,102,241,0.30)', 'rgba(34,197,94,0.30)',
+    'rgba(239,68,68,0.30)',  'rgba(245,158,11,0.30)',
+  ];
+
+  // Draw sector overlays + sector number labels
+  for (let sr = 0; sr < spc; sr++) {
+    for (let sc = 0; sc < spr; sc++) {
+      const secNum = sr * spr + sc + 1;
+      const x = sc * SECTOR_SZ * MINI_PX;
+      const y = sr * SECTOR_SZ * MINI_PX;
+      const w = Math.min(SECTOR_SZ, MAP_COLS - sc * SECTOR_SZ) * MINI_PX;
+      const h = Math.min(SECTOR_SZ, MAP_ROWS - sr * SECTOR_SZ) * MINI_PX;
+
+      // Sector tint
+      ctx.fillStyle = PALETTE[(secNum - 1) % PALETTE.length];
+      ctx.fillRect(x, y, w, h);
+
+      // Sector border
+      ctx.strokeStyle = 'rgba(148,163,184,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5);
+
+      // Sector number (large, centred)
+      const fontSize = Math.min(w, h) * 0.45;
+      ctx.font      = `bold ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.90)';
+      ctx.fillText(String(secNum), x + w / 2, y + h / 2);
+    }
+  }
+
+  // Click: determine which sector was clicked and submit
+  canvas.onclick = (e) => {
+    const rect  = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const col = Math.floor((e.clientX - rect.left) * scaleX / MINI_PX);
+    const row = Math.floor((e.clientY - rect.top)  * scaleY / MINI_PX);
+    if (col < 0 || col >= MAP_COLS || row < 0 || row >= MAP_ROWS) return;
+    const secR   = Math.floor(row / SECTOR_SZ);
+    const secC   = Math.floor(col / SECTOR_SZ);
+    const secNum = secR * spr + secC + 1;
+    submitDrone(secNum);
+  };
+}
+
+function closeDrone()        { document.getElementById('drone-modal').classList.add('hidden'); }
 function submitDrone(sector) {
   closeDrone();
   socket.emit('first_mate_drone', {game_id: GAME_ID, name: MY_NAME, sector});

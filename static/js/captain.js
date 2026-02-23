@@ -35,6 +35,9 @@ let stealthDirection   = null;
 let stealthSteps       = 1;
 let hasStealthDir      = false;  // true when stealth was used (need eng+FM to act still)
 
+// System charge tracking (received via systems_update events from server)
+let mySystems = {torpedo:{charge:0,max:3}, mine:{charge:0,max:3}, sonar:{charge:0,max:3}, drone:{charge:0,max:4}, stealth:{charge:0,max:5}};
+
 const ISLAND_SET = new Set(ISLANDS.map(([r,c]) => `${r},${c}`));
 
 // ── Socket ───────────────────────────────────────────────────
@@ -80,13 +83,12 @@ socket.on('turn_start', data => {
   updateEndTurnBtn();
   if (isMyTurn) {
     if (surfaceBonusForTeam === MY_TEAM && surfaceBonusTurns > 0) {
-      logEvent(`YOUR TURN (bonus — ${surfaceBonusTurns} left)`, 'highlight');
+      logEvent(`YOUR TURN (surface bonus — ${surfaceBonusTurns} left)`, 'highlight');
     } else {
       logEvent('YOUR TURN', 'highlight');
     }
-  } else {
-    logEvent(`${data.team} team's turn`);
   }
+  // Don't log "X team's turn" every turn — reduces event log noise
 });
 
 socket.on('direction_announced', data => {
@@ -134,17 +136,20 @@ socket.on('damage', data => {
   if (data.team === MY_TEAM) {
     myHealth = data.health;
     renderHealth();
-    const cause = data.cause === 'system_failure' ? '⚡ System failure! ' : '💥 ';
+    const cause = data.cause === 'system_failure' ? '⚡ System failure! '
+                : data.cause === 'surface'         ? '🌊 Surfaced! '        : '💥 ';
     logEvent(`${cause}We took ${data.amount} damage! (${data.health} HP left)`, 'danger');
     if (data.health <= 0) setTimeout(() => showToast('GAME OVER — RED team wins!', true), 400);
   } else {
-    const cause = data.cause === 'system_failure' ? '⚡ Enemy system failure ' : '💥 Enemy took ';
+    const cause = data.cause === 'system_failure' ? '⚡ Enemy system failure '
+                : data.cause === 'surface'         ? '🌊 Enemy surfaced! '   : '💥 Enemy took ';
     logEvent(`${cause}${data.amount} damage`);
   }
 });
 
 socket.on('mine_placed_ack', data => {
   myMines = (data.mines || []).map(([r,c]) => ({row:r, col:c}));
+  if (data.systems) mySystems = data.systems;
   renderMines();
   logEvent('Mine placed!');
 });
@@ -164,12 +169,28 @@ socket.on('sonar_query', data => {
   openSonarRespond(data.activating_team);
 });
 
-// Sonar result (new format: type1/val1/type2/val2)
+// Sonar result — broadcast to room; data.target tells us which team activated sonar
 socket.on('sonar_result', data => {
   const t1 = formatSonarLabel(data.type1, data.val1);
   const t2 = formatSonarLabel(data.type2, data.val2);
-  logEvent(`📡 Sonar result: "${t1}" and "${t2}" (1 is true, 1 is false)`, 'highlight');
-  showToast(`Sonar: ${t1} / ${t2}`);
+  if (data.target === MY_TEAM) {
+    // Our sonar — enemy captain responded with these values (1 true, 1 false)
+    logEvent(`📡 Sonar result: "${t1}" and "${t2}" (1 is true, 1 is false)`, 'highlight');
+    showToast(`Sonar: ${t1} / ${t2}`);
+  } else {
+    // Enemy sonar — we just responded; brief confirmation in log
+    logEvent(`📡 Sonar complete — we told enemy: "${t1}" and "${t2}"`);
+  }
+});
+
+// Drone result — broadcast to room so everyone sees it in event log
+socket.on('drone_result', data => {
+  const result = data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear';
+  if (data.target === MY_TEAM) {
+    logEvent(`🛸 Drone sector ${data.ask_sector}: ${result}`, 'highlight');
+  } else {
+    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${result}`);
+  }
 });
 
 socket.on('drone_announced', data => {
@@ -199,6 +220,10 @@ socket.on('game_over', data => {
   setLock(true, won ? 'Victory!' : 'Defeat');
 });
 
+socket.on('systems_update', data => {
+  if (data.systems) mySystems = data.systems;
+});
+
 socket.on('error', data => { showToast(data.msg, true); });
 
 socket.on('bot_chat', data => {
@@ -216,6 +241,7 @@ function updateFromState(state) {
     if (mySub.position) myPosition = {row: mySub.position[0], col: mySub.position[1]};
     if (mySub.trail)    myTrail    = mySub.trail.map(([r,c]) => ({row:r, col:c}));
     if (mySub.mines)    myMines    = mySub.mines.map(([r,c]) => ({row:r, col:c}));
+    if (mySub.systems)  mySystems  = mySub.systems;
   }
 
   isMyTurn      = (state.current_team === MY_TEAM);
@@ -462,6 +488,19 @@ function doEndTurn() {
 
 // ── Torpedo / Mine targeting ──────────────────────────────────
 function enterTargetMode(mode) {
+  if (!isMyTurn) return;
+
+  // Check charge status before entering target mode (saves time vs discovering error after targeting)
+  if (mode === 'torpedo') {
+    const t = mySystems.torpedo;
+    const ready = t && (t.ready || (t.charge || 0) >= (t.max || 3));
+    if (!ready) { showToast('🚀 Torpedo not charged yet — ask your first mate!', true); return; }
+  } else if (mode === 'mine') {
+    const m = mySystems.mine;
+    const ready = m && (m.ready || (m.charge || 0) >= (m.max || 3));
+    if (!ready) { showToast('💣 Mine not charged yet — ask your first mate!', true); return; }
+  }
+
   targetMode = mode;
   for (let r = 0; r < MAP_ROWS; r++) {
     for (let c = 0; c < MAP_COLS; c++) {
@@ -527,10 +566,28 @@ function renderStealthUI() {
     const btn = document.getElementById(`ssteps-${n}`);
     if (btn) btn.classList.toggle('active', n === stealthSteps);
   });
+
+  // Update compass centre cell
+  const centre = document.getElementById('stealth-compass-center');
+  if (centre) {
+    if (stealthSteps === 0) {
+      centre.textContent = '0';
+      centre.style.color = 'var(--accent)';
+    } else if (stealthDirection) {
+      const arrows = {north:'↑', south:'↓', west:'←', east:'→'};
+      centre.innerHTML = `${arrows[stealthDirection]}<br><small>${stealthSteps}</small>`;
+      centre.style.color = 'var(--accent)';
+    } else {
+      centre.textContent = '?';
+      centre.style.color = 'var(--text-muted)';
+    }
+  }
+
+  // Full preview text below compass
   const prev = document.getElementById('stealth-preview');
   if (prev) {
     if (stealthSteps === 0) prev.textContent = 'Stay in place (0 steps)';
-    else if (!stealthDirection) prev.textContent = 'Select a direction →';
+    else if (!stealthDirection) prev.textContent = 'Select a direction above';
     else {
       const labels = {north:'↑ North', south:'↓ South', west:'← West', east:'→ East'};
       prev.textContent = `Move ${stealthSteps} step${stealthSteps!==1?'s':''} ${labels[stealthDirection]}`;
@@ -627,10 +684,18 @@ function updateSonarHint() {
   const type2 = document.getElementById('sonar-type2')?.value;
   const hint  = document.getElementById('sonar-respond-hint');
   const btn   = document.getElementById('btn-sonar-submit');
-  const v1    = parseInt(document.getElementById('sonar-val1')?.value);
-  const v2    = parseInt(document.getElementById('sonar-val2')?.value);
+  const inp1  = document.getElementById('sonar-val1');
+  const inp2  = document.getElementById('sonar-val2');
+  const v1    = parseInt(inp1?.value);
+  const v2    = parseInt(inp2?.value);
 
   if (!hint || !btn) return;
+
+  // Update max attribute on inputs based on current type selection
+  const typeMax = {row: MAP_ROWS, col: MAP_COLS, sector: 4};
+  if (inp1) inp1.max = typeMax[type1] || MAP_ROWS;
+  if (inp2) inp2.max = typeMax[type2] || MAP_ROWS;
+
   if (type1 === type2) {
     hint.textContent = '⚠ Types must be different!';
     hint.style.color = 'var(--col-red)';
@@ -640,6 +705,21 @@ function updateSonarHint() {
   if (isNaN(v1) || isNaN(v2)) {
     hint.textContent = 'Enter both values to continue.';
     hint.style.color = 'var(--text-muted)';
+    btn.disabled = true;
+    return;
+  }
+  // Validate ranges (display values: rows/cols are 1-based, sectors are 1-4)
+  const maxV1 = typeMax[type1] || MAP_ROWS;
+  const maxV2 = typeMax[type2] || MAP_ROWS;
+  if (v1 < 1 || v1 > maxV1) {
+    hint.textContent = `⚠ Info 1 out of range (1–${maxV1})`;
+    hint.style.color = 'var(--col-red)';
+    btn.disabled = true;
+    return;
+  }
+  if (v2 < 1 || v2 > maxV2) {
+    hint.textContent = `⚠ Info 2 out of range (1–${maxV2})`;
+    hint.style.color = 'var(--col-red)';
     btn.disabled = true;
     return;
   }

@@ -119,7 +119,10 @@ socket.on('turn_start', data => {
   activeDir = null;
   renderBoard();
   updateStatus();
-  logEvent(data.team === MY_TEAM ? '🔔 OUR TURN — wait for captain to move' : `${data.team} team's turn`);
+  if (data.team === MY_TEAM) {
+    logEvent('🔔 OUR TURN — wait for captain to move', 'highlight');
+  }
+  // Don't log "X team's turn" — reduces event log noise
 });
 
 socket.on('damage', data => {
@@ -128,9 +131,11 @@ socket.on('damage', data => {
   renderHealth();
   if (data.team === MY_TEAM) {
     if (data.cause === 'direction_damage' && data.direction) flashDir(data.direction);
-    logEvent(`💥 Engineering damage! −${data.amount} HP (${data.health} left)`, 'danger');
+    const causeMsg = data.cause === 'surface' ? '🌊 Surfaced! −' : '💥 Engineering damage! −';
+    logEvent(`${causeMsg}${data.amount} HP (${data.health} left)`, 'danger');
   } else {
-    logEvent(`💥 Enemy took ${data.amount} damage`);
+    const causeMsg = data.cause === 'surface' ? '🌊 Enemy surfaced! ' : '';
+    logEvent(`${causeMsg}💥 Enemy took ${data.amount} damage`);
   }
 });
 
@@ -138,6 +143,22 @@ socket.on('circuit_cleared', data => {
   if (data.team === MY_TEAM) {
     logEvent(`✅ Circuit C${data.circuit} self-repaired!`, 'highlight');
     renderBoard();
+  }
+});
+
+socket.on('sonar_result', data => {
+  // Show in event log so engineer knows sonar completed
+  if (data.target === MY_TEAM) {
+    logEvent('📡 Sonar complete — result reported to captain & first mate', 'good');
+  }
+});
+
+socket.on('drone_result', data => {
+  const result = data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear';
+  if (data.target === MY_TEAM) {
+    logEvent(`🛸 Drone sector ${data.ask_sector}: ${result}`, 'highlight');
+  } else {
+    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${result}`);
   }
 });
 

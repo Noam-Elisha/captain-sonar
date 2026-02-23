@@ -64,25 +64,39 @@
 <div id="stealth-modal" class="modal hidden">
   <div class="modal-card">
     <h3>👻 Stealth (Silence)</h3>
-    <p>Move in a <strong>straight line</strong> — pick ONE direction and 0–4 steps.</p>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.8rem 0;justify-content:center;">
-      <button id="sdir-north" class="move-add-btn stealth-sel" onclick="setStealthDir('north')">↑ N</button>
-      <button id="sdir-south" class="move-add-btn stealth-sel" onclick="setStealthDir('south')">↓ S</button>
-      <button id="sdir-west"  class="move-add-btn stealth-sel" onclick="setStealthDir('west')">← W</button>
-      <button id="sdir-east"  class="move-add-btn stealth-sel" onclick="setStealthDir('east')">→ E</button>
+    <p style="font-size:.85rem;color:var(--text-muted);margin:.2rem 0 .8rem">Move silently — pick a direction and 0–4 steps. Enemy radio operator won't know your direction!</p>
+
+    <!-- Compass direction selector (3×3 grid: N top, W left, E right, S bottom) -->
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;grid-template-rows:auto auto auto;gap:.35rem;margin:0 auto .7rem;max-width:200px;align-items:center;justify-items:center;">
+      <div></div>
+      <button id="sdir-north" class="move-add-btn stealth-sel" onclick="setStealthDir('north')" style="min-width:54px;font-size:1rem">↑ N</button>
+      <div></div>
+
+      <button id="sdir-west" class="move-add-btn stealth-sel" onclick="setStealthDir('west')" style="min-width:54px;font-size:1rem">← W</button>
+      <div id="stealth-compass-center" style="width:46px;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:8px;font-size:1rem;color:var(--text-muted);text-align:center;font-weight:700;line-height:1.1;">?</div>
+      <button id="sdir-east" class="move-add-btn stealth-sel" onclick="setStealthDir('east')" style="min-width:54px;font-size:1rem">E →</button>
+
+      <div></div>
+      <button id="sdir-south" class="move-add-btn stealth-sel" onclick="setStealthDir('south')" style="min-width:54px;font-size:1rem">↓ S</button>
+      <div></div>
     </div>
-    <div style="display:flex;gap:.5rem;margin:.6rem 0;justify-content:center;align-items:center;">
-      <span style="color:var(--text-muted);font-size:.85rem;margin-right:.3rem;">Steps:</span>
+
+    <!-- Steps selector -->
+    <div style="display:flex;gap:.4rem;justify-content:center;align-items:center;margin:.4rem 0 .6rem;">
+      <span style="color:var(--text-muted);font-size:.85rem;min-width:3rem;text-align:right">Steps:</span>
       <button id="ssteps-0" class="move-add-btn stealth-sel" onclick="setStealthSteps(0)">0</button>
       <button id="ssteps-1" class="move-add-btn stealth-sel active" onclick="setStealthSteps(1)">1</button>
       <button id="ssteps-2" class="move-add-btn stealth-sel" onclick="setStealthSteps(2)">2</button>
       <button id="ssteps-3" class="move-add-btn stealth-sel" onclick="setStealthSteps(3)">3</button>
       <button id="ssteps-4" class="move-add-btn stealth-sel" onclick="setStealthSteps(4)">4</button>
     </div>
-    <div id="stealth-preview" style="text-align:center;color:var(--accent);font-size:.9rem;min-height:1.5rem;margin:.4rem 0;"></div>
+
+    <!-- Preview text -->
+    <div id="stealth-preview" style="text-align:center;color:var(--accent);font-size:.9rem;font-weight:600;min-height:1.4rem;margin:.2rem 0;"></div>
+
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeStealth()">Cancel</button>
-      <button id="btn-execute-stealth" class="btn-confirm" onclick="submitStealth()" disabled>Execute</button>
+      <button id="btn-execute-stealth" class="btn-confirm" onclick="submitStealth()" disabled>Execute Stealth</button>
     </div>
   </div>
 </div>
