@@ -56,7 +56,7 @@ socket.on('game_state', state => {
   const moved      = state.turn_state?.moved;
   const engDone    = state.turn_state?.engineer_done;
   const dir        = state.turn_state?.direction;
-  const stealthDir = state.turn_state?.stealth_direction; // only own team sees this (warp jump)
+  const stealthDir = state.turn_state?.stealth_direction; // only own team sees this (silent running)
 
   // Use public direction; fall back to private stealth direction
   const effectiveDir = dir || stealthDir || null;
@@ -73,7 +73,7 @@ socket.on('direction_to_mark', data => {
   updateStatus();
   renderBoard();
   const label = data.is_stealth
-    ? `✨ WARP JUMP — mark a node in the ${data.direction.toUpperCase()} section (secret!)`
+    ? `✨ SILENT RUNNING — mark a node in the ${data.direction.toUpperCase()} section (secret!)`
     : `⚡ Mark a node in the ${data.direction.toUpperCase()} section!`;
   logEvent(label, 'highlight');
 });
@@ -93,7 +93,7 @@ socket.on('turn_start', data => {
   renderBoard();
   updateStatus();
   if (data.team === MY_TEAM) {
-    logEvent('🔔 OUR TURN — wait for commander to navigate', 'highlight');
+    logEvent('🔔 OUR TURN — wait for captain to move', 'highlight');
   }
 });
 
@@ -103,10 +103,10 @@ socket.on('damage', data => {
   renderHealth();
   if (data.team === MY_TEAM) {
     if (data.cause === 'direction_damage' && data.direction) flashDir(data.direction);
-    const causeMsg = data.cause === 'surface' ? '⚠ Decloaked! −' : '💥 Engineering damage! −';
-    logEvent(`${causeMsg}${data.amount} hull (${data.health} left)`, 'danger');
+    const causeMsg = data.cause === 'surface' ? '⚠ Surfaced! −' : '💥 Engineering damage! −';
+    logEvent(`${causeMsg}${data.amount} health (${data.health} left)`, 'danger');
   } else {
-    const causeMsg = data.cause === 'surface' ? '⚠ Enemy decloaked! ' : '';
+    const causeMsg = data.cause === 'surface' ? '⚠ Enemy surfaced! ' : '';
     logEvent(`${causeMsg}💥 Enemy took ${data.amount} damage`);
   }
 });
@@ -120,23 +120,23 @@ socket.on('circuit_cleared', data => {
 
 socket.on('sonar_result', data => {
   if (data.target === MY_TEAM) {
-    logEvent('📡 Sensor sweep complete — result reported to commander & tactical officer', 'good');
+    logEvent('📡 Sonar complete — result reported to captain & first mate', 'good');
   }
 });
 
 socket.on('drone_result', data => {
   const result = data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear';
   if (data.target === MY_TEAM) {
-    logEvent(`🛸 Probe quadrant ${data.ask_sector}: ${result}`, 'highlight');
+    logEvent(`🛸 Drone sector ${data.ask_sector}: ${result}`, 'highlight');
   } else {
-    logEvent(`🛸 Enemy probe quadrant ${data.ask_sector}: ${result}`);
+    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${result}`);
   }
 });
 
 socket.on('surface_announced', data => {
   if (data.team === MY_TEAM) { myHealth = data.health; renderHealth(); }
   else                        { enemyHealth = data.health; renderHealth(); }
-  logEvent(`⚠ ${data.team} decloaked in quadrant ${data.sector}`);
+  logEvent(`⚠ ${data.team} surfaced in sector ${data.sector}`);
 });
 
 socket.on('game_over', data => {
@@ -294,7 +294,7 @@ function updateStatus() {
     el.textContent = `⚡ Mark a node in the ${activeDir.toUpperCase()} section`;
     el.style.color = 'var(--accent)';
   } else {
-    el.textContent = 'Waiting for commander to navigate…';
+    el.textContent = 'Waiting for captain to move…';
     el.style.color = 'var(--text-muted)';
   }
 }

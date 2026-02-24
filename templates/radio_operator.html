@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Signals Officer – Admiral Radar</title>
+  <title>Radio Operator – Admiral Radar</title>
   <link rel="stylesheet" href="/static/css/base.css"/>
   <link rel="stylesheet" href="/static/css/radio_operator.css"/>
 </head>
@@ -11,14 +11,14 @@
 <div id="result-toast" class="result-toast hidden"></div>
 
 <div class="app-layout">
-  <!-- Star chart tracking panel -->
+  <!-- Map tracking panel -->
   <div class="map-panel">
     <div class="ro-toolbar">
       <button class="tool-btn active" id="tool-draw"  onclick="setTool('draw')">✏ Draw</button>
       <button class="tool-btn"        id="tool-erase" onclick="setTool('erase')">⌫ Erase</button>
       <button class="tool-btn"        id="tool-pan"   onclick="setTool('pan')">✋ Pan</button>
       <button class="tool-btn"        id="tool-clear" onclick="clearAll()">✕ Clear</button>
-      <span class="ro-hint" id="ro-hint">Tracking enemy fleet movements…</span>
+      <span class="ro-hint" id="ro-hint">Tracking enemy team movements…</span>
     </div>
     <div class="map-wrapper">
       <div id="map-grid" class="map-grid"></div>
@@ -29,12 +29,12 @@
   <!-- Right panel: log + notes -->
   <div class="ctrl-panel">
     <div class="role-header team-{{ team }}">
-      <span class="role-title">📡 SIGNALS OFFICER</span>
-      <span class="team-badge">{{ team | upper }} FLEET</span>
+      <span class="role-title">📡 RADIO OPERATOR</span>
+      <span class="team-badge">{{ team | upper }} TEAM</span>
     </div>
 
     <div class="panel-section">
-      <div class="section-label">HULL INTEGRITY</div>
+      <div class="section-label">HEALTH</div>
       <div class="health-row fixed-health" id="own-health"></div>
     </div>
 

@@ -324,14 +324,14 @@ def captain_move(game, team, direction):
 
     sub = game["submarines"][team]
     if sub["surfaced"]:
-        return False, "Starship is decloaked – press RE-CLOAK first", []
+        return False, "Submarine is surfaced – press DIVE first", []
 
     dr, dc = direction_delta(direction)
     r, c = sub["position"]
     nr, nc = r + dr, c + dc
 
     if not is_valid_position(game, nr, nc):
-        return False, "Invalid move (boundary or asteroid)", []
+        return False, "Invalid move (boundary or island)", []
 
     # Can't revisit – trail includes starting position
     if [nr, nc] in sub["trail"]:
@@ -339,7 +339,7 @@ def captain_move(game, team, direction):
 
     # RULEBOOK: Cannot move into own mine
     if [nr, nc] in sub["mines"]:
-        return False, "Cannot move into own space mine", []
+        return False, "Cannot move into own mine", []
 
     # Move
     sub["position"] = [nr, nc]
@@ -418,12 +418,12 @@ def engineer_mark(game, team, direction, index):
     if current_team(game) != team:
         return False, "Not your turn", [], 0
     if not game["turn_state"]["moved"]:
-        return False, "Commander hasn't navigated yet", [], 0
+        return False, "Captain hasn't moved yet", [], 0
     ts = game["turn_state"]
     # Determine required direction (public move direction, or private stealth direction)
     effective_dir = ts["direction"] if ts["direction"] is not None else ts.get("stealth_direction")
     if effective_dir is None:
-        return False, "No direction to mark (starship decloaked)", [], 0
+        return False, "No direction to mark (submarine surfaced)", [], 0
     if ts["engineer_done"]:
         return False, "Already marked this turn", [], 0
     if direction != effective_dir:
@@ -466,12 +466,12 @@ def first_mate_charge(game, team, system):
     if current_team(game) != team:
         return False, "Not your turn", []
     if not game["turn_state"]["moved"]:
-        return False, "Commander hasn't navigated yet", []
+        return False, "Captain hasn't moved yet", []
     ts = game["turn_state"]
     # Allow charging on normal moves AND stealth moves (not on surface)
     effective_dir = ts["direction"] if ts["direction"] is not None else ts.get("stealth_direction")
     if effective_dir is None:
-        return False, "No charging when decloaking", []
+        return False, "No charging when surfacing", []
     if ts["first_mate_done"]:
         return False, "Already charged this turn", []
     if system not in SYSTEM_MAX_CHARGE:
@@ -569,7 +569,7 @@ def captain_place_mine(game, team, target_row, target_col):
     if current_team(game) != team:
         return False, "Not your turn", []
     if not game["turn_state"]["moved"]:
-        return False, "Must announce a course before placing a space mine", []
+        return False, "Must announce a course before placing a mine", []
     if game["turn_state"]["system_used"]:
         return False, "Already used a system this turn", []
     if not is_valid_position(game, target_row, target_col):
@@ -579,17 +579,17 @@ def captain_place_mine(game, team, target_row, target_col):
     r, c = sub["position"]
     manhattan_dist = abs(target_row - r) + abs(target_col - c)
     if manhattan_dist != 1:   # RULEBOOK: cardinal adjacency only (N/S/E/W)
-        return False, "Space mine must be placed in a cardinally adjacent cell (N/S/E/W only)", []
+        return False, "Mine must be placed in a cardinally adjacent cell (N/S/E/W only)", []
 
     # Can't place on route (trail lines) – rulebook explicit
     if [target_row, target_col] in sub["trail"]:
-        return False, "Cannot place space mine on a cell already in your flight path", []
+        return False, "Cannot place mine on a cell already in your trail", []
 
     # RULEBOOK: "must be repaired before the system can be activated" — reject, no damage.
     if not _check_charge(sub, "mine"):
-        return False, "Space mine system not fully charged yet", []
+        return False, "Mine system not fully charged yet", []
     if is_system_blocked(sub["engineering"], "mine"):
-        return False, "Space mine blocked by engineer breakdown (red node marked)", []
+        return False, "Mine blocked by engineer breakdown (red node marked)", []
 
     _use_system(sub, "mine")
     game["turn_state"]["system_used"] = True
@@ -608,11 +608,11 @@ def captain_detonate_mine(game, team, mine_index):
     if current_team(game) != team:
         return False, "Not your turn", []
     if game["turn_state"]["waiting_for"]:
-        return False, "Cannot detonate space mine while waiting for a response", []
+        return False, "Cannot detonate mine while waiting for a response", []
     sub = game["submarines"][team]
     # RULEBOOK: "At any time, except while surfaced, the Captain can trigger a mine"
     if sub["surfaced"]:
-        return False, "Cannot trigger a space mine while decloaked", []
+        return False, "Cannot trigger a mine while surfaced", []
     if mine_index < 0 or mine_index >= len(sub["mines"]):
         return False, "Invalid mine index", []
 
@@ -671,14 +671,14 @@ def captain_use_sonar(game, team):
     if current_team(game) != team:
         return False, "Not your turn", []
     if not game["turn_state"]["moved"]:
-        return False, "Must announce a course before activating sensors", []
+        return False, "Must announce a course before activating sonar", []
     if game["turn_state"]["system_used"]:
         return False, "Already used a system this turn", []
     sub = game["submarines"][team]
     if not _check_charge(sub, "sonar"):
-        return False, "Sensors not charged", []
+        return False, "Sonar not charged", []
     if is_system_blocked(sub["engineering"], "sonar"):
-        return False, "Sensors blocked by engineer breakdown (green nodes marked)", []
+        return False, "Sonar blocked by engineer breakdown (green nodes marked)", []
 
     _use_system(sub, "sonar")
     game["turn_state"]["system_used"] = True
@@ -755,14 +755,14 @@ def captain_use_drone(game, team, ask_sector):
     if current_team(game) != team:
         return False, "Not your turn", []
     if not game["turn_state"]["moved"]:
-        return False, "Must announce a course before launching scanner probe", []
+        return False, "Must announce a course before launching drone", []
     if game["turn_state"]["system_used"]:
         return False, "Already used a system this turn", []
     sub = game["submarines"][team]
     if not _check_charge(sub, "drone"):
-        return False, "Scanner probe not charged", []
+        return False, "Drone not charged", []
     if is_system_blocked(sub["engineering"], "drone"):
-        return False, "Scanner probe blocked by engineer breakdown (green nodes marked)", []
+        return False, "Drone blocked by engineer breakdown (green nodes marked)", []
 
     enemy_team = other_team(team)
     enemy_sub = game["submarines"][enemy_team]
@@ -802,16 +802,16 @@ def captain_use_stealth(game, team, direction, steps):
     if direction not in ("north", "south", "east", "west"):
         return False, f"Invalid direction: {direction}", []
     if not isinstance(steps, int) or steps < 0 or steps > 4:
-        return False, "Warp Jump: steps must be 0–4", []
+        return False, "Silent Running: steps must be 0–4", []
 
     sub = game["submarines"][team]
 
     # RULEBOOK: "must be repaired before the system can be activated" — reject, no damage.
     # If stealth isn't available the captain must make a normal move or surface instead.
     if not _check_charge(sub, "stealth"):
-        return False, "Warp drive not fully charged yet", []
+        return False, "Stealth not fully charged yet", []
     if is_system_blocked(sub["engineering"], "stealth"):
-        return False, "Warp drive blocked by engineer breakdown (yellow node marked)", []
+        return False, "Stealth blocked by engineer breakdown (yellow node marked)", []
 
     # Validate straight-line path
     r, c = sub["position"]
@@ -822,11 +822,11 @@ def captain_use_stealth(game, team, direction, steps):
     for _ in range(steps):
         r, c = r + dr, c + dc
         if not is_valid_position(game, r, c):
-            return False, "Invalid move during warp jump (boundary or asteroid)", []
+            return False, "Invalid move during silent running (boundary or island)", []
         if (r, c) in visited:
-            return False, "Cannot revisit a cell during warp jump", []
+            return False, "Cannot revisit a cell during silent running", []
         if (r, c) in mines_set:
-            return False, "Cannot move into own space mine during warp jump", []
+            return False, "Cannot move into own mine during silent running", []
         visited.add((r, c))
         path.append([r, c])
 
@@ -861,7 +861,7 @@ def can_end_turn(game, team):
     if current_team(game) != team:
         return False, "Not your turn"
     if not ts["moved"]:
-        return False, "Must navigate or decloak before ending turn"
+        return False, "Must move or surface before ending turn"
     if ts["waiting_for"]:
         return False, "Waiting for a response"
     # When a directional move OR stealth was used, engineer AND first mate must act first.
@@ -878,7 +878,7 @@ def can_end_turn(game, team):
                 sub["systems"][s] >= SYSTEM_MAX_CHARGE[s] for s in SYSTEM_MAX_CHARGE
             )
             if not all_full:
-                return False, "Waiting for tactical officer to charge a system"
+                return False, "Waiting for first mate to charge a system"
     return True, None
 
 

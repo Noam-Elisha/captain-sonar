@@ -56,10 +56,10 @@ socket.on('direction_announced', data => {
 
 socket.on('surface_announced', data => {
   if (data.team === ENEMY_TEAM) {
-    logMove(`DECLOAK (quadrant ${data.sector})`, 'surface');
-    logEvent(`⚠ Enemy decloaked in quadrant ${data.sector}!`, 'highlight');
+    logMove(`SURFACE (sector ${data.sector})`, 'surface');
+    logEvent(`⚠ Enemy surfaced in sector ${data.sector}!`, 'highlight');
     document.getElementById('ro-hint').textContent =
-      `Enemy decloaked in quadrant ${data.sector}!`;
+      `Enemy surfaced in sector ${data.sector}!`;
   }
   if (data.team === MY_TEAM) { myHealth = data.health; renderHealth(); }
   else                         { enemyHealth = data.health; renderHealth(); }
@@ -67,25 +67,25 @@ socket.on('surface_announced', data => {
 
 socket.on('stealth_announced', data => {
   if (data.team === ENEMY_TEAM) {
-    logMove(`WARP (${data.steps} step${data.steps!==1?'s':''})`, 'stealth');
-    logEvent(`✨ Enemy used warp jump — ${data.steps} silent step(s)`, 'highlight');
+    logMove(`SILENT (${data.steps} step${data.steps!==1?'s':''})`, 'stealth');
+    logEvent(`✨ Enemy used silent running — ${data.steps} silent step(s)`, 'highlight');
     document.getElementById('ro-hint').textContent =
-      `Enemy used warp jump — ${data.steps} silent steps, direction unknown`;
+      `Enemy used silent running — ${data.steps} silent steps, direction unknown`;
   }
 });
 
 socket.on('torpedo_fired', data => {
-  if (data.team === ENEMY_TEAM) logEvent(`⚠ Enemy fired plasma torpedo!`, 'danger');
+  if (data.team === ENEMY_TEAM) logEvent(`⚠ Enemy fired torpedo!`, 'danger');
 });
 
 socket.on('sonar_announced', data => {
-  if (data.team === ENEMY_TEAM) logEvent('📡 Enemy used sensor sweep on us — our commander must respond', 'warning');
-  else logEvent('📡 We used sensor sweep — waiting for enemy commander to respond');
+  if (data.team === ENEMY_TEAM) logEvent('📡 Enemy used sonar on us — our captain must respond', 'warning');
+  else logEvent('📡 We used sonar — waiting for enemy captain to respond');
 });
 
 socket.on('drone_announced', data => {
-  if (data.team === ENEMY_TEAM) logEvent(`🛸 Enemy scanned quadrant ${data.sector} with probe`);
-  else logEvent(`🛸 We scanned quadrant ${data.sector} with probe`);
+  if (data.team === ENEMY_TEAM) logEvent(`🛸 Enemy scanned sector ${data.sector} with drone`);
+  else logEvent(`🛸 We scanned sector ${data.sector} with drone`);
 });
 
 // Broadcast results — both teams hear these in the physical game
@@ -98,18 +98,18 @@ socket.on('sonar_result', data => {
   const info1 = fmtVal(data.type1, data.val1);
   const info2 = fmtVal(data.type2, data.val2);
   if (data.target === MY_TEAM) {
-    logEvent(`📡 Sensor result: enemy said "${info1}" AND "${info2}" (deduce which is true!)`, 'highlight');
+    logEvent(`📡 Sonar result: enemy said "${info1}" AND "${info2}" (deduce which is true!)`, 'highlight');
   } else {
-    logEvent(`📡 Enemy sensor sweep on us — we said "${info1}" and "${info2}"`);
+    logEvent(`📡 Enemy sonar on us — we said "${info1}" and "${info2}"`);
   }
 });
 
 socket.on('drone_result', data => {
   const result = data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear';
   if (data.target === MY_TEAM) {
-    logEvent(`🛸 Probe quadrant ${data.ask_sector}: ${result}`, 'highlight');
+    logEvent(`🛸 Drone sector ${data.ask_sector}: ${result}`, 'highlight');
   } else {
-    logEvent(`🛸 Enemy probe quadrant ${data.ask_sector}: ${result}`);
+    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${result}`);
   }
 });
 

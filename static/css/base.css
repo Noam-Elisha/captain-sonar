@@ -237,7 +237,7 @@ h1, h2, h3 { line-height: 1.2; }
   font-size: .6rem; color: rgba(200,168,50,.35); font-weight: 700;
 }
 
-/* Asteroid overlay */
+/* Island overlay */
 .island-cell {
   background: linear-gradient(135deg, #2a2a30, #1a1a20) !important;
   border-radius: 3px !important;
@@ -278,7 +278,7 @@ h1, h2, h3 { line-height: 1.2; }
   padding: .6rem .8rem; font-size: .85rem; font-family: inherit;
 }
 
-/* ── Warp jump modal ── */
+/* ── Silent running modal ── */
 .stealth-moves { display: flex; gap: .4rem; flex-wrap: wrap; min-height: 2rem; }
 .stealth-tag {
   background: var(--accent-dim); color: var(--accent); border-radius: 6px;
@@ -290,7 +290,7 @@ h1, h2, h3 { line-height: 1.2; }
 }
 .move-add-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ── Sector grid (probe modal) ── */
+/* ── Sector grid (drone modal) ── */
 .sector-grid {
   display: grid; grid-template-columns: repeat(3,1fr); gap: .4rem; margin: .8rem 0;
 }

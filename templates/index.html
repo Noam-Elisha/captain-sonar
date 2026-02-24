@@ -58,16 +58,16 @@
 
   <!-- Create -->
   <div class="tab-content active" id="pane-create">
-    <label for="create-name">YOUR CALLSIGN</label>
-    <input type="text" id="create-name" placeholder="e.g. Commander Nova" maxlength="24"/>
+    <label for="create-name">YOUR NAME</label>
+    <input type="text" id="create-name" placeholder="e.g. Captain Bob" maxlength="24"/>
     <button class="btn-primary" onclick="createGame()">Create Game</button>
     <p class="error-msg" id="create-error"></p>
   </div>
 
   <!-- Join -->
   <div class="tab-content" id="pane-join">
-    <label for="join-name">YOUR CALLSIGN</label>
-    <input type="text" id="join-name" placeholder="e.g. Pilot Orion" maxlength="24"/>
+    <label for="join-name">YOUR NAME</label>
+    <input type="text" id="join-name" placeholder="e.g. Player2" maxlength="24"/>
     <label for="join-code">GAME CODE</label>
     <input type="text" id="join-code" placeholder="6-character code" maxlength="6"
            style="text-transform:uppercase"/>
@@ -77,7 +77,7 @@
 
   <!-- Spectate -->
   <div class="tab-content" id="pane-spectate">
-    <label for="spec-name">YOUR CALLSIGN</label>
+    <label for="spec-name">YOUR NAME</label>
     <input type="text" id="spec-name" placeholder="e.g. Observer" maxlength="24"/>
     <label for="spec-code">GAME CODE</label>
     <input type="text" id="spec-code" placeholder="6-character code" maxlength="6"
@@ -85,12 +85,12 @@
     <button class="btn-primary" onclick="spectateGame()" style="background:#c8a832;color:#111">👁 Watch Game</button>
     <p class="error-msg" id="spectate-error"></p>
     <p style="color:var(--text-muted);font-size:.75rem;margin-top:.6rem;text-align:center;">
-      You'll see both starships &amp; all game info — no role needed
+      You'll see both submarines &amp; all game info — no role needed
     </p>
   </div>
 
   <hr class="divider"/>
-  <p class="code-hint">Needs 2–8 players · Each team needs Commander, Tactical Officer &amp; Engineer</p>
+  <p class="code-hint">Needs 2–8 players · Each team needs Captain, First Mate &amp; Engineer</p>
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -106,14 +106,14 @@
 
   function createGame() {
     const name = document.getElementById('create-name').value.trim();
-    if (!name) return showErr('create','Enter your callsign');
+    if (!name) return showErr('create','Enter your name');
     socket.emit('create_game', {name});
   }
 
   function joinGame() {
     const name = document.getElementById('join-name').value.trim();
     const code = document.getElementById('join-code').value.trim().toUpperCase();
-    if (!name) return showErr('join','Enter your callsign');
+    if (!name) return showErr('join','Enter your name');
     if (code.length !== 6) return showErr('join','Enter the 6-character game code');
     socket.emit('join_game', {name, game_id: code});
   }
@@ -125,7 +125,7 @@
   function spectateGame() {
     const name = document.getElementById('spec-name').value.trim();
     const code = document.getElementById('spec-code').value.trim().toUpperCase();
-    if (!name) return showErr('spectate', 'Enter your callsign');
+    if (!name) return showErr('spectate', 'Enter your name');
     if (code.length !== 6) return showErr('spectate', 'Enter the 6-character game code');
     socket.emit('join_as_spectator', {name, game_id: code});
   }

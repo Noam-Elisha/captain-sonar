@@ -1,4 +1,4 @@
-/* ── Commander role styles (mission control theme) ── */
+/* ── Captain role styles (mission control theme) ── */
 
 /* Map grid cell */
 .map-cell {
@@ -21,7 +21,7 @@
   border-radius: 3px;
 }
 
-/* Starship marker */
+/* Submarine marker */
 .sub-marker {
   position: absolute; width: 100%; height: 100%;
   display: flex; align-items: center; justify-content: center;
@@ -39,11 +39,11 @@
   50%       { box-shadow: 0 0 16px var(--team-light); }
 }
 
-/* Space mine marker */
+/* Mine marker */
 .mine-cell { background: #2d1515 !important; }
 .mine-icon { font-size: .8rem; line-height: 1; }
 
-/* Plasma torpedo target highlight */
+/* Torpedo target highlight */
 .torpedo-target { background: #2a1010 !important; cursor: crosshair !important; }
 .torpedo-target:hover { background: #3d1818 !important; }
 .mine-target { background: #2d1515 !important; cursor: crosshair !important; }
@@ -112,7 +112,7 @@
 .stealth-btn { border-color: rgba(234,179,8,.3); }
 .stealth-btn:hover { border-color: #fbbf24; background: #2a2510; color: #fbbf24; }
 
-/* Sensor sweep respond modal inputs */
+/* Sonar respond modal inputs */
 .sonar-select, .sonar-input {
   width: 100%; padding: .4rem .6rem; border-radius: 6px;
   border: 1px solid var(--border); background: var(--bg-input); color: var(--text);
@@ -122,7 +122,7 @@
   outline: none; border-color: var(--accent);
 }
 
-/* Decloak bonus indicator */
+/* Surface bonus indicator */
 .surface-bonus-bar {
   display: flex; align-items: center; gap: .5rem;
   padding: .35rem .7rem; background: rgba(249,115,22,.1);

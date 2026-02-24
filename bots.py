@@ -2,10 +2,10 @@
 Admiral Radar — Rule-based AI bots for all 4 roles.
 
 Each bot only has access to information appropriate to its role:
-  CaptainBot      : own position/flight path/systems/health + enemy health/last-decloaked-quadrant
+  CaptainBot      : own position/trail/systems/health + enemy health/last-surfaced-sector
   FirstMateBot    : own systems + own health
   EngineerBot     : own engineering board + direction to mark (from server)
-  RadioOperatorBot: publicly-announced directions, decloak announcements, weapon events
+  RadioOperatorBot: publicly-announced directions, surface announcements, weapon events
 """
 
 from __future__ import annotations   # enables PEP 604 | syntax on Python 3.8+
@@ -133,7 +133,7 @@ class CaptainBot:
         cols = map_def["cols"]
         island_set = set(tuple(p) for p in map_def["islands"])
 
-        # Blue → top-left quadrant, Red → bottom-right quadrant
+        # Blue → top-left sector, Red → bottom-right sector
         if self.team == "blue":
             row_range = range(0, rows // 2)
             col_range = range(0, cols // 2)
@@ -365,11 +365,11 @@ class FirstMateBot:
     @staticmethod
     def describe_charge(system: str) -> str:
         return {
-            "torpedo": "charging plasma torpedoes 🚀",
-            "mine":    "charging space mine launcher 💠",
-            "sonar":   "charging sensors 📡",
-            "drone":   "charging scanner probe 🛸",
-            "stealth": "charging warp drive ✨",
+            "torpedo": "charging torpedoes 🚀",
+            "mine":    "charging mine launcher 💠",
+            "sonar":   "charging sonar 📡",
+            "drone":   "charging drone 🛸",
+            "stealth": "charging stealth ✨",
         }.get(system, f"charging {system}")
 
 
@@ -463,11 +463,11 @@ class RadioOperatorBot:
         """Produce a concise analysis message."""
         total = len(self.move_log)
         if not self.move_log and not self.surface_sectors:
-            return "No enemy contact yet — scanning all quadrants 👁"
+            return "No enemy contact yet — scanning all sectors 👁"
 
         parts = []
         if self.surface_sectors:
-            parts.append(f"last decloaked quadrant {self.surface_sectors[-1]}")
+            parts.append(f"last surfaced sector {self.surface_sectors[-1]}")
 
         if total >= 1:
             # Direction histogram for recent moves
@@ -478,7 +478,7 @@ class RadioOperatorBot:
             parts.append(f"moving mostly {dominant} ({freq}/{len(recent)} recent moves)")
 
         if self.torpedo_count:
-            parts.append(f"fired {self.torpedo_count} plasma torpedo(es)")
+            parts.append(f"fired {self.torpedo_count} torpedo(es)")
 
         if not parts:
             return "Tracking enemy — no clear pattern yet"

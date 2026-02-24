@@ -132,7 +132,7 @@
 
   <div class="lobby-grid">
     <div class="team-panel blue">
-      <h2>🔵 BLUE FLEET</h2>
+      <h2>🔵 BLUE TEAM</h2>
       <div id="blue-slots"></div>
       <div class="add-bot-section" id="blue-bot-panel" style="display:none">
         <p class="add-bot-label">🤖 Add Bot</p>
@@ -140,7 +140,7 @@
       </div>
     </div>
     <div class="team-panel red">
-      <h2>🔴 RED FLEET</h2>
+      <h2>🔴 RED TEAM</h2>
       <div id="red-slots"></div>
       <div class="add-bot-section" id="red-bot-panel" style="display:none">
         <p class="add-bot-label">🤖 Add Bot</p>
@@ -159,29 +159,29 @@
 
   <!-- Spectator mode bar (shown when YOU are a spectator) -->
   <div class="spectator-mode-bar" id="spectator-mode-bar">
-    <p>👁 <strong>You are watching as spectator.</strong> When the game starts you'll see everything — both starships, all systems, and the full star chart.</p>
-    <button class="btn-leave-spec" onclick="leaveSpectator()">← Join as Crew Instead</button>
+    <p>👁 <strong>You are watching as spectator.</strong> When the game starts you'll see everything — both submarines, all systems, and the full map.</p>
+    <button class="btn-leave-spec" onclick="leaveSpectator()">← Join as Player Instead</button>
   </div>
 
   <div class="controls" id="player-controls">
     <h2>YOUR SETTINGS</h2>
     <div class="team-row">
-      <button class="team-btn blue" id="btn-blue" onclick="chooseTeam('blue')">🔵 Blue Fleet</button>
-      <button class="team-btn red"  id="btn-red"  onclick="chooseTeam('red')">🔴 Red Fleet</button>
+      <button class="team-btn blue" id="btn-blue" onclick="chooseTeam('blue')">🔵 Blue Team</button>
+      <button class="team-btn red"  id="btn-red"  onclick="chooseTeam('red')">🔴 Red Team</button>
     </div>
     <p style="color:var(--text-muted);font-size:.78rem;margin:.1rem 0 .6rem;">CHOOSE ROLE</p>
     <div class="role-grid" id="role-grid">
-      <button class="role-btn" id="role-captain"        onclick="chooseRole('captain')">🌟 Commander</button>
-      <button class="role-btn" id="role-first_mate"     onclick="chooseRole('first_mate')">⚔ Tactical Officer</button>
+      <button class="role-btn" id="role-captain"        onclick="chooseRole('captain')">🌟 Captain</button>
+      <button class="role-btn" id="role-first_mate"     onclick="chooseRole('first_mate')">⚔ First Mate</button>
       <button class="role-btn" id="role-engineer"       onclick="chooseRole('engineer')">⚡ Engineer</button>
-      <button class="role-btn" id="role-radio_operator" onclick="chooseRole('radio_operator')">📡 Signals Officer</button>
+      <button class="role-btn" id="role-radio_operator" onclick="chooseRole('radio_operator')">📡 Radio Operator</button>
     </div>
     <div class="action-row">
       <button class="btn-ready not-ready" id="btn-ready" onclick="toggleReady()">Ready Up</button>
       <button class="btn-start" id="btn-start" onclick="startGame()" disabled>Start Game</button>
       <button class="btn-spec"  id="btn-spectate" onclick="joinAsSpectator()">👁 Watch</button>
     </div>
-    <p class="status-bar" id="status-bar">Waiting for crew…</p>
+    <p class="status-bar" id="status-bar">Waiting for players…</p>
   </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -189,8 +189,8 @@
   const GAME_ID   = "{{ game_id }}";
   const MY_NAME   = "{{ player_name }}";
   const ROLE_LABELS = {
-    captain: '🌟 Commander', first_mate: '⚔ Tactical',
-    engineer: '⚡ Engineer', radio_operator: '📡 Signals'
+    captain: '🌟 Captain', first_mate: '⚔ First Mate',
+    engineer: '⚡ Engineer', radio_operator: '📡 Radio Op'
   };
   const ALL_ROLES = ['captain', 'first_mate', 'engineer', 'radio_operator'];
 
@@ -327,7 +327,7 @@
     const el = document.getElementById(containerId);
     el.innerHTML = '';
     if (players.length === 0) {
-      el.innerHTML = '<p style="color:var(--text-muted);font-size:.8rem;padding:.4rem">No crew yet</p>';
+      el.innerHTML = '<p style="color:var(--text-muted);font-size:.8rem;padding:.4rem">No players yet</p>';
       return;
     }
     players.forEach(p => {

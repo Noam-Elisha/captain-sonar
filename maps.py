@@ -3,7 +3,7 @@
 #
 # RULEBOOK: "the map is divided into nine sectors in real-time mode and
 #            four sectors in turn-by-turn mode."
-# This game implements TURN-BY-TURN mode only → 4 sectors (2×2 quadrant layout).
+# This game implements TURN-BY-TURN mode only → 4 sectors (2×2 sector layout).
 # sector_size=8 on a 15×15 map → ceil(15/8)=2 sectors per axis → 2×2 = 4 sectors.
 #   Sector 1: top-left    (rows 0-7,  cols 0-7)
 #   Sector 2: top-right   (rows 0-7,  cols 8-14)
@@ -19,19 +19,19 @@ MAPS = {
         "cols": 15,
         "sector_size": 8,   # TBT mode: ceil(15/8)=2 per axis → 2×2 = 4 sectors
         "islands": [
-            # Top-left quadrant (rows 0-7, cols 0-7)
+            # Top-left sector (rows 0-7, cols 0-7)
             (2, 1), (3, 1),
             (1, 7),
             (6, 2), (7, 2), (7, 3),
             (7, 6),
-            # Top-right quadrant (rows 0-7, cols 8-14)
+            # Top-right sector (rows 0-7, cols 8-14)
             (0, 12), (1, 12),
             (5, 11), (5, 12),
-            # Bottom-left quadrant (rows 8-14, cols 0-7)
+            # Bottom-left sector (rows 8-14, cols 0-7)
             (8, 7),
             (11, 1), (12, 1),
             (10, 7), (11, 7), (11, 8),
-            # Bottom-right quadrant (rows 8-14, cols 8-14)
+            # Bottom-right sector (rows 8-14, cols 8-14)
             (12, 11), (13, 12),
         ],
     }
@@ -40,7 +40,7 @@ MAPS = {
 
 def get_sector(row, col, sector_size=8, map_cols=15):
     """Return 1-indexed TBT sector number for a given (row, col).
-    RULEBOOK: TBT mode uses 4 sectors (2×2 quadrant layout).
+    RULEBOOK: TBT mode uses 4 sectors (2×2 sector layout).
     Uses ceiling division so sector_size=8 on a 15-wide map gives 2 sectors per axis.
     """
     sectors_per_row = math.ceil(map_cols / sector_size)

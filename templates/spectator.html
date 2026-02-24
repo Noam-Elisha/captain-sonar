@@ -20,12 +20,12 @@
     <span class="spec-name">{{ player_name }}</span>
   </header>
 
-  <!-- ── MAIN: blue panel | star chart | red panel ───────────── -->
+  <!-- ── MAIN: blue panel | map | red panel ───────────── -->
   <div class="spec-main">
 
-    <!-- BLUE FLEET PANEL -->
+    <!-- BLUE TEAM PANEL -->
     <div class="spec-team-panel spec-blue">
-      <div class="stp-title blue">🔵 BLUE FLEET</div>
+      <div class="stp-title blue">🔵 BLUE TEAM</div>
       <div class="stp-section">
         <div class="section-label">HULL</div>
         <div class="health-row fixed-health" id="blue-health"></div>
@@ -38,28 +38,28 @@
         <div class="section-label">POWER GRID</div>
         <div id="blue-eng"></div>
       </div>
-      <div class="stp-surfaced" id="blue-surfaced">⚠ DECLOAKED</div>
+      <div class="stp-surfaced" id="blue-surfaced">⚠ SURFACED</div>
       <div class="stp-section stp-moves">
         <div class="section-label">MOVE LOG</div>
         <div class="move-log" id="blue-moves"></div>
       </div>
     </div>
 
-    <!-- STAR CHART CENTER -->
+    <!-- MAP CENTER -->
     <div class="spec-map-area">
       <div class="map-wrapper" id="spec-wrapper" style="position:relative;display:inline-block">
         <div id="spec-map" class="map-grid"></div>
         <!-- SVG: ships, trails, mines -->
         <svg id="spec-svg" style="position:absolute;top:0;left:0;pointer-events:none;overflow:visible;z-index:2;"></svg>
-        <!-- Signals drawing layers (one per fleet, no pointer-events) -->
+        <!-- Radio operator drawing layers (one per team, no pointer-events) -->
         <canvas id="ro-canvas-blue" style="position:absolute;top:0;left:0;pointer-events:none;z-index:3;opacity:0.75;"></canvas>
         <canvas id="ro-canvas-red"  style="position:absolute;top:0;left:0;pointer-events:none;z-index:3;opacity:0.75;"></canvas>
       </div>
     </div>
 
-    <!-- RED FLEET PANEL -->
+    <!-- RED TEAM PANEL -->
     <div class="spec-team-panel spec-red">
-      <div class="stp-title red">🔴 RED FLEET</div>
+      <div class="stp-title red">🔴 RED TEAM</div>
       <div class="stp-section">
         <div class="section-label">HULL</div>
         <div class="health-row fixed-health" id="red-health"></div>
@@ -72,7 +72,7 @@
         <div class="section-label">POWER GRID</div>
         <div id="red-eng"></div>
       </div>
-      <div class="stp-surfaced" id="red-surfaced">⚠ DECLOAKED</div>
+      <div class="stp-surfaced" id="red-surfaced">⚠ SURFACED</div>
       <div class="stp-section stp-moves">
         <div class="section-label">MOVE LOG</div>
         <div class="move-log" id="red-moves"></div>
