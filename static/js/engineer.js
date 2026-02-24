@@ -1,5 +1,5 @@
 /* ============================================================
-   Captain Sonar — engineer.js
+   Admiral Radar — engineer.js
    Engineering board: 2×2 section layout (WEST/NORTH/SOUTH/EAST)
    SVG overlay draws circuits (C1/C2/C3):
      Intra-panel: chain the 3 circuit nodes within each non-EAST section.
@@ -56,7 +56,7 @@ socket.on('game_state', state => {
   const moved      = state.turn_state?.moved;
   const engDone    = state.turn_state?.engineer_done;
   const dir        = state.turn_state?.direction;
-  const stealthDir = state.turn_state?.stealth_direction; // only own team sees this
+  const stealthDir = state.turn_state?.stealth_direction; // only own team sees this (warp jump)
 
   // Use public direction; fall back to private stealth direction
   const effectiveDir = dir || stealthDir || null;
@@ -73,7 +73,7 @@ socket.on('direction_to_mark', data => {
   updateStatus();
   renderBoard();
   const label = data.is_stealth
-    ? `👻 STEALTH move — mark a node in the ${data.direction.toUpperCase()} section (secret!)`
+    ? `✨ WARP JUMP — mark a node in the ${data.direction.toUpperCase()} section (secret!)`
     : `⚡ Mark a node in the ${data.direction.toUpperCase()} section!`;
   logEvent(label, 'highlight');
 });
@@ -93,7 +93,7 @@ socket.on('turn_start', data => {
   renderBoard();
   updateStatus();
   if (data.team === MY_TEAM) {
-    logEvent('🔔 OUR TURN — wait for captain to move', 'highlight');
+    logEvent('🔔 OUR TURN — wait for commander to navigate', 'highlight');
   }
 });
 
@@ -103,40 +103,40 @@ socket.on('damage', data => {
   renderHealth();
   if (data.team === MY_TEAM) {
     if (data.cause === 'direction_damage' && data.direction) flashDir(data.direction);
-    const causeMsg = data.cause === 'surface' ? '🌊 Surfaced! −' : '💥 Engineering damage! −';
-    logEvent(`${causeMsg}${data.amount} HP (${data.health} left)`, 'danger');
+    const causeMsg = data.cause === 'surface' ? '⚠ Decloaked! −' : '💥 Engineering damage! −';
+    logEvent(`${causeMsg}${data.amount} hull (${data.health} left)`, 'danger');
   } else {
-    const causeMsg = data.cause === 'surface' ? '🌊 Enemy surfaced! ' : '';
+    const causeMsg = data.cause === 'surface' ? '⚠ Enemy decloaked! ' : '';
     logEvent(`${causeMsg}💥 Enemy took ${data.amount} damage`);
   }
 });
 
 socket.on('circuit_cleared', data => {
   if (data.team === MY_TEAM) {
-    logEvent(`✅ Circuit C${data.circuit} self-repaired!`, 'highlight');
+    logEvent(`✅ Circuit C${data.circuit} repaired!`, 'highlight');
     renderBoard();
   }
 });
 
 socket.on('sonar_result', data => {
   if (data.target === MY_TEAM) {
-    logEvent('📡 Sonar complete — result reported to captain & first mate', 'good');
+    logEvent('📡 Sensor sweep complete — result reported to commander & tactical officer', 'good');
   }
 });
 
 socket.on('drone_result', data => {
   const result = data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear';
   if (data.target === MY_TEAM) {
-    logEvent(`🛸 Drone sector ${data.ask_sector}: ${result}`, 'highlight');
+    logEvent(`🛸 Probe quadrant ${data.ask_sector}: ${result}`, 'highlight');
   } else {
-    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${result}`);
+    logEvent(`🛸 Enemy probe quadrant ${data.ask_sector}: ${result}`);
   }
 });
 
 socket.on('surface_announced', data => {
   if (data.team === MY_TEAM) { myHealth = data.health; renderHealth(); }
   else                        { enemyHealth = data.health; renderHealth(); }
-  logEvent(`🌊 ${data.team} surfaced in sector ${data.sector}`);
+  logEvent(`⚠ ${data.team} decloaked in quadrant ${data.sector}`);
 });
 
 socket.on('game_over', data => {
@@ -148,7 +148,7 @@ socket.on('game_over', data => {
 socket.on('error', data => showToast(data.msg, true));
 
 socket.on('bot_chat', data => {
-  const icons = { captain: '🤖🎖', first_mate: '🤖⚙', engineer: '🤖🔧', radio_operator: '🤖📡' };
+  const icons = { captain: '🤖🌟', first_mate: '🤖⚔', engineer: '🤖⚡', radio_operator: '🤖📡' };
   logEvent(`${icons[data.role] || '🤖'} [${data.name}]: ${data.msg}`, 'bot');
 });
 
@@ -167,7 +167,7 @@ function renderHearts(id, hp, max) {
   for (let i = 0; i < max; i++) {
     const s = document.createElement('span');
     s.className   = 'health-heart' + (i < hp ? '' : ' empty');
-    s.textContent = i < hp ? '❤️' : '🖤';
+    s.textContent = i < hp ? '🛡️' : '💔';
     el.appendChild(s);
   }
 }
@@ -294,7 +294,7 @@ function updateStatus() {
     el.textContent = `⚡ Mark a node in the ${activeDir.toUpperCase()} section`;
     el.style.color = 'var(--accent)';
   } else {
-    el.textContent = 'Waiting for captain to move…';
+    el.textContent = 'Waiting for commander to navigate…';
     el.style.color = 'var(--text-muted)';
   }
 }

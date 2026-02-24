@@ -1,5 +1,5 @@
 /* ============================================================
-   Captain Sonar — radio_operator.js
+   Admiral Radar — radio_operator.js
    Tracks enemy movements, draws on overlay canvas.
    Pan mode: drag the drawing overlay to compare different map positions.
    Canvas strokes relayed to spectators via socket.
@@ -56,10 +56,10 @@ socket.on('direction_announced', data => {
 
 socket.on('surface_announced', data => {
   if (data.team === ENEMY_TEAM) {
-    logMove(`SURFACE (sector ${data.sector})`, 'surface');
-    logEvent(`⚠ Enemy surfaced in sector ${data.sector}!`, 'highlight');
+    logMove(`DECLOAK (quadrant ${data.sector})`, 'surface');
+    logEvent(`⚠ Enemy decloaked in quadrant ${data.sector}!`, 'highlight');
     document.getElementById('ro-hint').textContent =
-      `Enemy surfaced in sector ${data.sector}!`;
+      `Enemy decloaked in quadrant ${data.sector}!`;
   }
   if (data.team === MY_TEAM) { myHealth = data.health; renderHealth(); }
   else                         { enemyHealth = data.health; renderHealth(); }
@@ -67,25 +67,25 @@ socket.on('surface_announced', data => {
 
 socket.on('stealth_announced', data => {
   if (data.team === ENEMY_TEAM) {
-    logMove(`STEALTH (${data.steps} step${data.steps!==1?'s':''})`, 'stealth');
-    logEvent(`👻 Enemy used stealth — ${data.steps} silent step(s)`, 'highlight');
+    logMove(`WARP (${data.steps} step${data.steps!==1?'s':''})`, 'stealth');
+    logEvent(`✨ Enemy used warp jump — ${data.steps} silent step(s)`, 'highlight');
     document.getElementById('ro-hint').textContent =
-      `Enemy used stealth — ${data.steps} silent steps, direction unknown`;
+      `Enemy used warp jump — ${data.steps} silent steps, direction unknown`;
   }
 });
 
 socket.on('torpedo_fired', data => {
-  if (data.team === ENEMY_TEAM) logEvent(`⚠ Enemy fired torpedo!`, 'danger');
+  if (data.team === ENEMY_TEAM) logEvent(`⚠ Enemy fired plasma torpedo!`, 'danger');
 });
 
 socket.on('sonar_announced', data => {
-  if (data.team === ENEMY_TEAM) logEvent('📡 Enemy used sonar on us — our captain must respond', 'warning');
-  else logEvent('📡 We used sonar — waiting for enemy captain to respond');
+  if (data.team === ENEMY_TEAM) logEvent('📡 Enemy used sensor sweep on us — our commander must respond', 'warning');
+  else logEvent('📡 We used sensor sweep — waiting for enemy commander to respond');
 });
 
 socket.on('drone_announced', data => {
-  if (data.team === ENEMY_TEAM) logEvent(`🛸 Enemy scanned sector ${data.sector} with drone`);
-  else logEvent(`🛸 We scanned sector ${data.sector} with drone`);
+  if (data.team === ENEMY_TEAM) logEvent(`🛸 Enemy scanned quadrant ${data.sector} with probe`);
+  else logEvent(`🛸 We scanned quadrant ${data.sector} with probe`);
 });
 
 // Broadcast results — both teams hear these in the physical game
@@ -98,18 +98,18 @@ socket.on('sonar_result', data => {
   const info1 = fmtVal(data.type1, data.val1);
   const info2 = fmtVal(data.type2, data.val2);
   if (data.target === MY_TEAM) {
-    logEvent(`📡 Sonar result: enemy said "${info1}" AND "${info2}" (deduce which is true!)`, 'highlight');
+    logEvent(`📡 Sensor result: enemy said "${info1}" AND "${info2}" (deduce which is true!)`, 'highlight');
   } else {
-    logEvent(`📡 Enemy sonar on us — we said "${info1}" and "${info2}"`);
+    logEvent(`📡 Enemy sensor sweep on us — we said "${info1}" and "${info2}"`);
   }
 });
 
 socket.on('drone_result', data => {
   const result = data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear';
   if (data.target === MY_TEAM) {
-    logEvent(`🛸 Drone sector ${data.ask_sector}: ${result}`, 'highlight');
+    logEvent(`🛸 Probe quadrant ${data.ask_sector}: ${result}`, 'highlight');
   } else {
-    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${result}`);
+    logEvent(`🛸 Enemy probe quadrant ${data.ask_sector}: ${result}`);
   }
 });
 
@@ -129,7 +129,7 @@ socket.on('game_over', data => {
 socket.on('error', data => showToast(data.msg, true));
 
 socket.on('bot_chat', data => {
-  const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
+  const icons = {captain:'🤖🌟', first_mate:'🤖⚔', engineer:'🤖⚡', radio_operator:'🤖📡'};
   logEvent(`${icons[data.role]||'🤖'} [${data.name}]: ${data.msg}`, 'bot');
 });
 
@@ -327,7 +327,7 @@ function renderHearts(id, hp, max) {
   for (let i = 0; i < max; i++) {
     const s = document.createElement('span');
     s.className   = 'health-heart' + (i < hp ? '' : ' empty');
-    s.textContent = i < hp ? '❤️' : '🖤';
+    s.textContent = i < hp ? '🛡️' : '💔';
     el.appendChild(s);
   }
 }

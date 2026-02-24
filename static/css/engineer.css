@@ -1,4 +1,4 @@
-/* ── Engineer styles ── */
+/* ── Systems Engineer styles (space theme) ── */
 
 .status-label {
   padding: .5rem 1rem;
@@ -8,7 +8,7 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Engineering board: 2×2 section layout
+   Power Grid: 2×2 section layout
      top-left  = WEST     top-right = NORTH
      bot-left  = SOUTH    bot-right = EAST
    SVG overlay draws circuit loops (C1/C2/C3) across all 4 sections.

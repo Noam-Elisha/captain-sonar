@@ -1,8 +1,8 @@
 /* ============================================================
-   Captain Sonar — captain.js
-   Captain sees own health, controls movement + weapons.
-   Weapon charges are hidden (ask first mate).
-   Enemy health is NOT shown to captain.
+   Admiral Radar — captain.js
+   Commander sees own hull, controls navigation + weapons.
+   Weapon charges are hidden (ask tactical officer).
+   Enemy hull is NOT shown to commander.
    ============================================================ */
 
 // ── Globals (injected by template) ──────────────────────────
@@ -24,16 +24,16 @@ let isSurfaced     = false;
 let engineerDone   = false;
 let firstMateDone  = false;
 let lastDirection  = null;
-let mySector       = null;  // current sector (for sonar respond hint)
+let mySector       = null;  // current quadrant (for sensor respond hint)
 
-// Surface bonus state
+// Decloak bonus state
 let surfaceBonusForTeam  = null;  // which team has bonus turns
 let surfaceBonusTurns    = 0;     // turns remaining for bonus team
 
 let targetMode         = null;   // 'torpedo' | 'mine' | null
 let stealthDirection   = null;
 let stealthSteps       = 1;
-let hasStealthDir      = false;  // true when stealth was used (need eng+FM to act still)
+let hasStealthDir      = false;  // true when warp jump was used (need eng+tactical to act still)
 
 // System charge tracking (received via systems_update events from server)
 let mySystems = {torpedo:{charge:0,max:6}, mine:{charge:0,max:6}, sonar:{charge:0,max:6}, drone:{charge:0,max:6}, stealth:{charge:0,max:4}};
@@ -60,7 +60,7 @@ socket.on('game_phase', data => {
   logEvent(`Game started! ${data.current_team === MY_TEAM ? 'YOUR TURN' : data.current_team + ' goes first'}`, 'highlight');
 });
 
-socket.on('sub_placed', data => { logEvent(`${data.team} team placed their submarine`); });
+socket.on('sub_placed', data => { logEvent(`${data.team} team placed their starship`); });
 
 socket.on('moved_self', data => {
   myPosition    = {row: data.row, col: data.col};
@@ -83,12 +83,12 @@ socket.on('turn_start', data => {
   updateEndTurnBtn();
   if (isMyTurn) {
     if (surfaceBonusForTeam === MY_TEAM && surfaceBonusTurns > 0) {
-      logEvent(`YOUR TURN (surface bonus — ${surfaceBonusTurns} left)`, 'highlight');
+      logEvent(`YOUR TURN (decloak bonus — ${surfaceBonusTurns} left)`, 'highlight');
     } else {
       logEvent('YOUR TURN', 'highlight');
     }
   }
-  // Don't log "X team's turn" every turn — reduces event log noise
+  // Don't log "X team's turn" every turn — reduces comms log noise
 });
 
 socket.on('direction_announced', data => {
@@ -97,7 +97,7 @@ socket.on('direction_announced', data => {
 
 socket.on('surface_announced', data => {
   if (data.team === MY_TEAM) {
-    // RULEBOOK: no damage from surfacing; enemy gets 3 bonus turns
+    // RULEBOOK: no damage from decloaking; enemy gets 3 bonus turns
     mySector   = data.sector;
     isSurfaced = true;
     hasMoved   = true;
@@ -105,9 +105,9 @@ socket.on('surface_announced', data => {
     showDiveBtn(true);
     updateLock();
     updateEndTurnBtn();
-    logEvent(`You surfaced in sector ${data.sector} — trail cleared, engineering reset. Enemy gets 3 bonus turns!`, 'warning');
+    logEvent(`You decloaked in quadrant ${data.sector} — trail cleared, engineering reset. Enemy gets 3 bonus turns!`, 'warning');
   } else {
-    logEvent(`Enemy surfaced in sector ${data.sector}! 🎯 We get 3 bonus turns!`, 'highlight');
+    logEvent(`Enemy decloaked in quadrant ${data.sector}! 🎯 We get 3 bonus turns!`, 'highlight');
   }
   renderSurfaceBonusBar();
 });
@@ -120,15 +120,15 @@ socket.on('dive_ack', () => {
 
 socket.on('torpedo_fired', data => {
   if (data.team !== MY_TEAM) {
-    logEvent(`⚠ Enemy fired torpedo at row ${data.row+1}, col ${COL_LABELS[data.col]}!`, 'danger');
+    logEvent(`⚠ Enemy fired plasma torpedo at row ${data.row+1}, col ${COL_LABELS[data.col]}!`, 'danger');
   } else {
-    logEvent(`Torpedo fired at row ${data.row+1}, col ${COL_LABELS[data.col]}`);
+    logEvent(`Plasma torpedo fired at row ${data.row+1}, col ${COL_LABELS[data.col]}`);
   }
   showExplosion(data.row, data.col);
 });
 
 socket.on('mine_detonated', data => {
-  logEvent(`💥 Mine detonated at row ${data.row+1}, col ${COL_LABELS[data.col]}`, 'danger');
+  logEvent(`💥 Space mine detonated at row ${data.row+1}, col ${COL_LABELS[data.col]}`, 'danger');
   showExplosion(data.row, data.col);
 });
 
@@ -137,12 +137,12 @@ socket.on('damage', data => {
     myHealth = data.health;
     renderHealth();
     const cause = data.cause === 'system_failure' ? '⚡ System failure! '
-                : data.cause === 'surface'         ? '🌊 Surfaced! '        : '💥 ';
-    logEvent(`${cause}We took ${data.amount} damage! (${data.health} HP left)`, 'danger');
+                : data.cause === 'surface'         ? '⚠ Decloaked! '        : '💥 ';
+    logEvent(`${cause}We took ${data.amount} damage! (${data.health} hull left)`, 'danger');
     if (data.health <= 0) setTimeout(() => showToast('GAME OVER — RED team wins!', true), 400);
   } else {
     const cause = data.cause === 'system_failure' ? '⚡ Enemy system failure '
-                : data.cause === 'surface'         ? '🌊 Enemy surfaced! '   : '💥 Enemy took ';
+                : data.cause === 'surface'         ? '⚠ Enemy decloaked! '   : '💥 Enemy took ';
     logEvent(`${cause}${data.amount} damage`);
   }
 });
@@ -151,71 +151,71 @@ socket.on('mine_placed_ack', data => {
   myMines = (data.mines || []).map(([r,c]) => ({row:r, col:c}));
   if (data.systems) mySystems = data.systems;
   renderMines();
-  logEvent('Mine placed!');
+  logEvent('Space mine placed!');
 });
 
 socket.on('stealth_announced', data => {
   if (data.team !== MY_TEAM)
-    logEvent(`👻 Enemy used stealth (${data.steps} step${data.steps!==1?'s':''})`);
+    logEvent(`✨ Enemy used warp jump (${data.steps} step${data.steps!==1?'s':''})`);
 });
 socket.on('sonar_announced', data => {
-  if (data.team !== MY_TEAM) logEvent('📡 Enemy activated sonar — you must respond!', 'warning');
-  else logEvent('📡 Sonar activated — awaiting enemy captain response');
+  if (data.team !== MY_TEAM) logEvent('📡 Enemy activated sensor sweep — you must respond!', 'warning');
+  else logEvent('📡 Sensor sweep activated — awaiting enemy commander response');
 });
 
-// RULEBOOK interactive sonar: enemy captain must respond with 1 true, 1 false
+// RULEBOOK interactive sensors: enemy commander must respond with 1 true, 1 false
 socket.on('sonar_query', data => {
-  logEvent(`📡 Enemy sonar detected! Respond with 1 true and 1 false info.`, 'warning');
+  logEvent(`📡 Enemy sensor sweep detected! Respond with 1 true and 1 false info.`, 'warning');
   openSonarRespond(data.activating_team);
 });
 
-// Sonar result — broadcast to room; data.target tells us which team activated sonar
+// Sensor sweep result — broadcast to room; data.target tells us which team activated sensors
 socket.on('sonar_result', data => {
   const t1 = formatSonarLabel(data.type1, data.val1);
   const t2 = formatSonarLabel(data.type2, data.val2);
   if (data.target === MY_TEAM) {
-    // Our sonar — enemy captain responded with these values (1 true, 1 false)
-    logEvent(`📡 Sonar result: "${t1}" and "${t2}" (1 is true, 1 is false)`, 'highlight');
-    showToast(`Sonar: ${t1} / ${t2}`);
+    // Our sensors — enemy commander responded with these values (1 true, 1 false)
+    logEvent(`📡 Sensor sweep result: "${t1}" and "${t2}" (1 is true, 1 is false)`, 'highlight');
+    showToast(`Sensors: ${t1} / ${t2}`);
   } else {
-    // Enemy sonar — we just responded; brief confirmation in log
-    logEvent(`📡 Sonar complete — we told enemy: "${t1}" and "${t2}"`);
+    // Enemy sensors — we just responded; brief confirmation in log
+    logEvent(`📡 Sensor sweep complete — we told enemy: "${t1}" and "${t2}"`);
   }
 });
 
-// Drone result — broadcast to room so everyone sees it in event log
+// Probe result — broadcast to room so everyone sees it in comms log
 socket.on('drone_result', data => {
   const result = data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear';
   if (data.target === MY_TEAM) {
-    logEvent(`🛸 Drone sector ${data.ask_sector}: ${result}`, 'highlight');
+    logEvent(`🛸 Probe quadrant ${data.ask_sector}: ${result}`, 'highlight');
   } else {
-    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${result}`);
+    logEvent(`🛸 Enemy probe quadrant ${data.ask_sector}: ${result}`);
   }
 });
 
 socket.on('drone_announced', data => {
-  if (data.team !== MY_TEAM) logEvent(`🛸 Enemy scanned sector ${data.sector} with drone`);
+  if (data.team !== MY_TEAM) logEvent(`🛸 Enemy scanned quadrant ${data.sector} with probe`);
 });
 
-// RULEBOOK blackout: no valid moves → auto-surface
+// RULEBOOK blackout: no valid moves → auto-decloak
 socket.on('blackout_announced', data => {
   if (data.team === MY_TEAM) {
-    logEvent('⚠ BLACKOUT! No valid moves — automatically surfacing!', 'danger');
+    logEvent('⚠ BLACKOUT! No valid moves — automatically decloaking!', 'danger');
   } else {
-    logEvent(`⚠ Enemy blackout — they had no valid moves and surfaced!`, 'highlight');
+    logEvent(`⚠ Enemy blackout — they had no valid moves and decloaked!`, 'highlight');
   }
 });
 
 // Circuit cleared (no damage — just inform)
 socket.on('circuit_cleared', data => {
   if (data.team === MY_TEAM) {
-    logEvent(`🔄 Circuit C${data.circuit} completed — nodes cleared (no damage)`, 'good');
+    logEvent(`🔄 Circuit C${data.circuit} repaired — nodes cleared (no damage)`, 'good');
   }
 });
 
 socket.on('game_over', data => {
   const won = (data.winner === MY_TEAM);
-  showToast(won ? '🏆 YOU WIN!' : '💀 You were sunk…', !won);
+  showToast(won ? '🏆 YOU WIN!' : '💀 You were destroyed…', !won);
   logEvent(`GAME OVER — ${data.winner} team wins!`, 'highlight');
   setLock(true, won ? 'Victory!' : 'Defeat');
 });
@@ -227,7 +227,7 @@ socket.on('systems_update', data => {
 socket.on('error', data => { showToast(data.msg, true); });
 
 socket.on('bot_chat', data => {
-  const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
+  const icons = {captain:'🤖🌟', first_mate:'🤖⚔', engineer:'🤖⚡', radio_operator:'🤖📡'};
   logEvent(`${icons[data.role]||'🤖'} [${data.name}]: ${data.msg}`, 'bot');
 });
 
@@ -250,10 +250,10 @@ function updateFromState(state) {
   engineerDone  = ts.engineer_done  || false;
   firstMateDone = ts.first_mate_done || false;
   lastDirection = ts.direction      || null;
-  // stealth_direction is non-null when stealth was used — still need eng+FM to act
+  // stealth_direction is non-null when warp jump was used — still need eng+tactical to act
   hasStealthDir = !!(ts.stealth_direction);
 
-  // Surface bonus tracking
+  // Decloak bonus tracking
   const sb = state.surface_bonus;
   if (sb) {
     surfaceBonusForTeam = sb.for_team;
@@ -310,7 +310,7 @@ function renderMap() {
       cell.id        = `cell-${r}-${c}`;
       if (ISLAND_SET.has(`${r},${c}`)) {
         cell.classList.add('island-cell');
-        cell.title = 'Island';
+        cell.title = 'Asteroid';
       } else {
         cell.addEventListener('click', () => onCellClick(r, c));
       }
@@ -351,7 +351,7 @@ function onCellClick(r, c) {
     if (ISLAND_SET.has(`${r},${c}`)) return;
     socket.emit('place_sub', {game_id: GAME_ID, name: MY_NAME, row: r, col: c});
     document.getElementById('placement-overlay').innerHTML =
-      '<div class="placement-card"><h2>Submarine placed!</h2><p>Waiting for enemy…</p></div>';
+      '<div class="placement-card"><h2>Starship placed!</h2><p>Waiting for enemy…</p></div>';
     return;
   }
   if (!isMyTurn) return;
@@ -406,7 +406,7 @@ function renderMines() {
     if (!cell) return;
     const icon       = document.createElement('div');
     icon.className   = 'mine-icon';
-    icon.textContent = '💣';
+    icon.textContent = '💠';
     icon.title       = 'Click to detonate';
     icon.style.cursor = 'pointer';
     icon.addEventListener('click', e => { e.stopPropagation(); detonateMine(idx); });
@@ -421,7 +421,7 @@ function renderMines() {
     myMines.forEach((m, idx) => {
       const entry = document.createElement('div');
       entry.className = 'mine-entry';
-      entry.innerHTML = `<span>💣 Row ${m.row+1} / ${COL_LABELS[m.col]}</span>`;
+      entry.innerHTML = `<span>💠 Row ${m.row+1} / ${COL_LABELS[m.col]}</span>`;
       const btn       = document.createElement('button');
       btn.className   = 'mine-det-btn';
       btn.textContent = 'Detonate';
@@ -434,7 +434,7 @@ function renderMines() {
   }
 }
 
-// ── Health rendering ─────────────────────────────────────────
+// ── Hull rendering ───────────────────────────────────────────
 function renderHealth() {
   const el = document.getElementById('own-health');
   if (!el) return;
@@ -442,7 +442,7 @@ function renderHealth() {
   for (let i = 0; i < 4; i++) {
     const h = document.createElement('span');
     h.className   = `health-heart ${i < myHealth ? '' : 'empty'}`;
-    h.textContent = i < myHealth ? '❤️' : '🖤';
+    h.textContent = i < myHealth ? '🛡️' : '💔';
     el.appendChild(h);
   }
 }
@@ -457,7 +457,7 @@ function doMove(direction) {
 
 function doSurface() {
   if (!isMyTurn || hasMoved) return;
-  if (!confirm('Surface your submarine? Your trail + engineering board will be cleared. You reveal your sector. The enemy team gets 3 free turns!')) return;
+  if (!confirm('Decloak your starship? Your trail + engineering board will be cleared. You reveal your quadrant. The enemy team gets 3 free turns!')) return;
   socket.emit('captain_surface', {game_id: GAME_ID, name: MY_NAME});
 }
 
@@ -477,7 +477,7 @@ function showDiveBtn(show) {
 
 function doEndTurn() {
   if (!isMyTurn || !hasMoved) return;
-  // Must wait for eng+FM on a regular move OR a stealth move
+  // Must wait for eng+tactical on a regular move OR a warp jump move
   const needWait = (lastDirection !== null) || hasStealthDir;
   if (needWait && (!engineerDone || !firstMateDone)) return;
   socket.emit('captain_end_turn', {game_id: GAME_ID, name: MY_NAME});
@@ -494,11 +494,11 @@ function enterTargetMode(mode) {
   if (mode === 'torpedo') {
     const t = mySystems.torpedo;
     const ready = t && (t.ready || (t.charge || 0) >= (t.max || 6));
-    if (!ready) { showToast('🚀 Torpedo not charged yet — ask your first mate!', true); return; }
+    if (!ready) { showToast('🚀 Plasma torpedo not charged yet — ask your tactical officer!', true); return; }
   } else if (mode === 'mine') {
     const m = mySystems.mine;
     const ready = m && (m.ready || (m.charge || 0) >= (m.max || 6));
-    if (!ready) { showToast('💣 Mine not charged yet — ask your first mate!', true); return; }
+    if (!ready) { showToast('💠 Space mine not charged yet — ask your tactical officer!', true); return; }
   }
 
   targetMode = mode;
@@ -518,7 +518,7 @@ function enterTargetMode(mode) {
       }
     }
   }
-  showToast(mode === 'torpedo' ? 'Click a target (range 1–4)' : 'Click cell to place mine (N/S/E/W only)');
+  showToast(mode === 'torpedo' ? 'Click a target (range 1–4)' : 'Click cell to place space mine (N/S/E/W only)');
 }
 
 function clearTargetMode() {
@@ -548,7 +548,7 @@ function showExplosion(r, c) {
   setTimeout(() => ring.remove(), 700);
 }
 
-// ── Stealth ───────────────────────────────────────────────────
+// ── Warp Jump ─────────────────────────────────────────────────
 function openStealth() {
   stealthDirection = null; stealthSteps = 1;
   renderStealthUI();
@@ -623,7 +623,7 @@ function updateLock() {
 
 function updateEndTurnBtn() {
   const btn      = document.getElementById('btn-end-turn');
-  // Must wait on normal move OR stealth move (both require eng + FM to act)
+  // Must wait on normal move OR warp jump move (both require eng + tactical to act)
   const needWait = (lastDirection !== null) || hasStealthDir;
   const canEnd   = isMyTurn && hasMoved && (!needWait || engineerDone) && (!needWait || firstMateDone);
   btn.disabled   = !canEnd;
@@ -637,7 +637,7 @@ function updateRoleWaitStatus() {
   if (!isMyTurn || !hasMoved || !needWait) { el.innerHTML = ''; return; }
   const engIcon = engineerDone  ? '✅' : '⏳';
   const fmIcon  = firstMateDone ? '✅' : '⏳';
-  el.innerHTML = `<span class="wait-label">${engIcon} Engineer</span><span class="wait-label">${fmIcon} First Mate</span>`;
+  el.innerHTML = `<span class="wait-label">${engIcon} Engineer</span><span class="wait-label">${fmIcon} Tactical Officer</span>`;
 }
 
 function logEvent(msg, cls) {
@@ -656,19 +656,19 @@ function showToast(msg, isError) {
   setTimeout(() => t.classList.add('hidden'), 4000);
 }
 
-// ── Sonar respond (enemy captain must answer with 1 true + 1 false) ──────────
+// ── Sensor respond (enemy commander must answer with 1 true + 1 false) ──────────
 function openSonarRespond(activatingTeam) {
   // Show player's own position as hint (they know their truth)
   const posEl = document.getElementById('sonar-respond-position');
   if (posEl && myPosition) {
-    // Always compute sector from current position (matches Python get_sector() logic)
-    // RULEBOOK: TBT has 4 sectors (2×2). sector = (row//SECTOR_SZ)*sectorsPerRow + (col//SECTOR_SZ) + 1
+    // Always compute quadrant from current position (matches Python get_sector() logic)
+    // RULEBOOK: TBT has 4 quadrants (2×2). sector = (row//SECTOR_SZ)*sectorsPerRow + (col//SECTOR_SZ) + 1
     const sectorsPerRow = Math.ceil(MAP_COLS / SECTOR_SZ);
     const sr = Math.floor(myPosition.row / SECTOR_SZ);
     const sc = Math.floor(myPosition.col / SECTOR_SZ);
     const secVal = sr * sectorsPerRow + sc + 1;
     posEl.textContent =
-      `Your position: Row ${myPosition.row + 1} | Col ${COL_LABELS[myPosition.col]} (${myPosition.col + 1}) | Sector ${secVal} (1–4)`;
+      `Your position: Row ${myPosition.row + 1} | Col ${COL_LABELS[myPosition.col]} (${myPosition.col + 1}) | Quadrant ${secVal} (1–4)`;
   }
   // Reset inputs
   const v1 = document.getElementById('sonar-val1');
@@ -746,7 +746,7 @@ function submitSonarRespond() {
     type1, val1, type2, val2
   });
   document.getElementById('sonar-respond-modal').classList.add('hidden');
-  logEvent(`📡 Sonar response submitted: ${formatSonarLabel(type1, val1)} & ${formatSonarLabel(type2, val2)}`);
+  logEvent(`📡 Sensor response submitted: ${formatSonarLabel(type1, val1)} & ${formatSonarLabel(type2, val2)}`);
 }
 
 function formatSonarLabel(type, val) {
@@ -756,7 +756,7 @@ function formatSonarLabel(type, val) {
   return `${type}=${val}`;
 }
 
-// ── Surface bonus bar ─────────────────────────────────────────
+// ── Decloak bonus bar ─────────────────────────────────────────
 function renderSurfaceBonusBar() {
   // Remove existing bar
   document.querySelectorAll('.surface-bonus-bar').forEach(e => e.remove());
@@ -766,8 +766,8 @@ function renderSurfaceBonusBar() {
   const bar = document.createElement('div');
   bar.className = 'surface-bonus-bar';
   bar.textContent = isOurs
-    ? `⏱ Bonus: ${surfaceBonusTurns} extra turn${surfaceBonusTurns !== 1 ? 's' : ''} remaining (enemy surfaced!)`
-    : `⏱ Enemy bonus: ${surfaceBonusTurns} turn${surfaceBonusTurns !== 1 ? 's' : ''} (we surfaced)`;
+    ? `⏱ Bonus: ${surfaceBonusTurns} extra turn${surfaceBonusTurns !== 1 ? 's' : ''} remaining (enemy decloaked!)`
+    : `⏱ Enemy bonus: ${surfaceBonusTurns} turn${surfaceBonusTurns !== 1 ? 's' : ''} (we decloaked)`;
 
   // Insert after the turn status row
   const movePanel = document.getElementById('move-panel');

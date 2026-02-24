@@ -1,4 +1,4 @@
-# Captain Sonar – Map definitions
+# Admiral Radar – Map definitions
 # Coordinates are 0-indexed (row, col)
 #
 # RULEBOOK: "the map is divided into nine sectors in real-time mode and

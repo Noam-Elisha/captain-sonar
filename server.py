@@ -1,5 +1,5 @@
 """
-Captain Sonar – Flask + SocketIO server.
+Admiral Radar – Flask + SocketIO server.
 Run:  python server.py
 """
 
@@ -320,11 +320,11 @@ def _can_start(game_id):
         team_players = [p for p in players if p["team"] == team]
         roles = {p["role"] for p in team_players}
         if "captain" not in roles:
-            return False, f"{team} team needs a captain"
+            return False, f"{team} fleet needs a commander"
         if "first_mate" not in roles:
-            return False, f"{team} team needs a first mate"
+            return False, f"{team} fleet needs a tactical officer"
         if "engineer" not in roles:
-            return False, f"{team} team needs an engineer"
+            return False, f"{team} fleet needs an engineer"
     return True, None
 
 
@@ -457,7 +457,7 @@ def _run_bot_loop(game_id: str):
 
 
 def _bot_placement_step(game_id: str, g: dict, game: dict) -> bool:
-    """Place submarines for any bot captains that haven't placed yet."""
+    """Deploy starships for any bot commanders that haven't deployed yet."""
     acted = False
     for team in ["blue", "red"]:
         if game["submarines"][team]["position"] is not None:
@@ -472,7 +472,7 @@ def _bot_placement_step(game_id: str, g: dict, game: dict) -> bool:
             socketio.emit("sub_placed", {"team": team}, room=game_id)
             socketio.emit("bot_chat", {
                 "team": team, "role": "captain", "name": cap["name"],
-                "msg": f"Placing submarine at row {row+1}, col {col+1} 🗺",
+                "msg": f"Deploying starship at row {row+1}, col {col+1} 🗺",
             }, room=game_id)
             if game["phase"] == "playing":
                 current = gs.current_team(game)
@@ -500,7 +500,7 @@ def _bot_playing_step(game_id: str, g: dict, game: dict) -> bool:
                 socketio.emit("dive_announced", {"team": team}, room=game_id)
                 socketio.emit("bot_chat", {
                     "team": team, "role": "captain", "name": cap["name"],
-                    "msg": "Diving back down 🤿",
+                    "msg": "Re-cloaking 🛡",
                 }, room=game_id)
                 _broadcast_game_state(game_id)
                 return True
@@ -601,7 +601,7 @@ def _bot_captain_action(game_id, g, game, team, cap_player) -> bool:
                 _broadcast_game_state(game_id)
                 socketio.emit("bot_chat", {
                     "team": team, "role": "captain", "name": name,
-                    "msg": f"👻 Stealth: {steps} steps {direction}",
+                    "msg": f"✨ Warp Jump: {steps} steps {direction}",
                 }, room=game_id)
                 return True
         # Stealth failed or no moves — surface
@@ -620,7 +620,7 @@ def _do_surface(game_id, game, team, bot_name, surface_events):
     _broadcast_game_state(game_id)
     socketio.emit("bot_chat", {
         "team": team, "role": "captain", "name": bot_name,
-        "msg": "Surfacing to clear trail 🌊",
+        "msg": "Decloaking to clear flight path ✨",
     }, room=game_id)
 
 
@@ -662,7 +662,7 @@ def _bot_captain_weapon_action(game_id, g, game, team, cap_player) -> bool:
             _broadcast_game_state(game_id)
             socketio.emit("bot_chat", {
                 "team": team, "role": "captain", "name": name,
-                "msg": f"🛸 Drone sector {sector}: {'CONTACT!' if in_sec else 'clear'}",
+                "msg": f"🛸 Scanner Probe quadrant {sector}: {'CONTACT!' if in_sec else 'clear'}",
             }, room=game_id)
             return True
 
@@ -673,7 +673,7 @@ def _bot_captain_weapon_action(game_id, g, game, team, cap_player) -> bool:
             _broadcast_game_state(game_id)
             socketio.emit("bot_chat", {
                 "team": team, "role": "captain", "name": name,
-                "msg": "📡 Sonar activated — awaiting enemy response",
+                "msg": "📡 Sensors activated — awaiting enemy response",
             }, room=game_id)
             return True
 
@@ -763,7 +763,7 @@ def _bot_sonar_respond(game_id, game, responding_team, cap_player) -> bool:
         _broadcast_game_state(game_id)
         socketio.emit("bot_chat", {
             "team": responding_team, "role": "captain", "name": cap_player["name"],
-            "msg": f"📡 Sonar response: {type1}={val1}, {type2}={val2}",
+            "msg": f"📡 Sensor response: {type1}={val1}, {type2}={val2}",
         }, room=game_id)
         _schedule_bots(game_id)
         return True
@@ -789,7 +789,7 @@ def lobby():
 
 @app.route("/spectate")
 def spectate():
-    """Spectator view — sees full game state, both submarines, all info."""
+    """Spectator view — sees full game state, both starships, all info."""
     game_id = request.args.get("game_id", "").upper().strip()
     name    = request.args.get("name", "").strip()
 
@@ -1031,7 +1031,7 @@ def on_set_role(data):
     if role:
         for other_name, other_p in games[game_id]["players"].items():
             if other_name != name and other_p["team"] == team and other_p["role"] == role:
-                return emit("error", {"msg": f"{role} already taken on {team} team"})
+                return emit("error", {"msg": f"{role} already taken on {team} fleet"})
 
     p["role"] = role
     p["ready"] = False
@@ -1047,7 +1047,7 @@ def on_player_ready(data):
         return emit("error", {"msg": "Player not found"})
     p = games[game_id]["players"][name]
     if not p["role"] or not p["team"]:
-        return emit("error", {"msg": "Must have role and team before readying up"})
+        return emit("error", {"msg": "Must have role and fleet before readying up"})
     p["ready"] = ready
     _emit_lobby(game_id)
 
@@ -1075,7 +1075,7 @@ def on_add_bot(data):
     # Check role not already taken on this team
     for p in g["players"].values():
         if p["team"] == team and p["role"] == role:
-            return emit("error", {"msg": f"{role} already taken on {team} team"})
+            return emit("error", {"msg": f"{role} already taken on {team} fleet"})
 
     # Check total player count
     if len(g["players"]) >= 8:
@@ -1169,7 +1169,7 @@ def on_place_sub(data):
     g = games[game_id]
     p = _get_player(game_id, name)
     if not p or p["role"] != "captain":
-        return emit("error", {"msg": "Only the captain can place the submarine"})
+        return emit("error", {"msg": "Only the commander can deploy the starship"})
     if g["game"] is None or g["game"]["phase"] != "placement":
         return emit("error", {"msg": "Not in placement phase"})
 
@@ -1197,7 +1197,7 @@ def _get_captain(game_id, name):
         return None, None
     p = _get_player(game_id, name)
     if not p or p["role"] != "captain":
-        emit("error", {"msg": "Only the captain can do that"})
+        emit("error", {"msg": "Only the commander can do that"})
         return None, None
     if g["game"]["phase"] != "playing":
         emit("error", {"msg": "Game is not in playing phase"})
@@ -1345,12 +1345,12 @@ def on_sonar_respond(data):
 
     p = _get_player(game_id, name)
     if not p or p["role"] != "captain":
-        return emit("error", {"msg": "Only the enemy captain can respond to sonar"})
+        return emit("error", {"msg": "Only the enemy commander can respond to sensors"})
 
     # Validate this captain is on the responding (enemy) team
     activating_team = gs.current_team(g["game"])
     if p["team"] == activating_team:
-        return emit("error", {"msg": "The activating team's captain cannot respond to their own sonar"})
+        return emit("error", {"msg": "The activating fleet's commander cannot respond to their own sensors"})
 
     # Convert val1/val2 to int if they're numeric
     try:
@@ -1465,7 +1465,7 @@ def on_first_mate_charge(data):
 
     p = _get_player(game_id, name)
     if not p or p["role"] != "first_mate":
-        return emit("error", {"msg": "Only the first mate can charge systems"})
+        return emit("error", {"msg": "Only the tactical officer can charge systems"})
 
     ok, msg, events = gs.first_mate_charge(g["game"], p["team"], system)
     if not ok:
@@ -1488,7 +1488,7 @@ def on_first_mate_sonar(data):
 
     p = _get_player(game_id, name)
     if not p or p["role"] != "first_mate":
-        return emit("error", {"msg": "Only the first mate can use sonar"})
+        return emit("error", {"msg": "Only the tactical officer can use sensors"})
     if g["game"]["phase"] != "playing":
         return emit("error", {"msg": "Game is not in playing phase"})
 
@@ -1513,7 +1513,7 @@ def on_first_mate_drone(data):
 
     p = _get_player(game_id, name)
     if not p or p["role"] != "first_mate":
-        return emit("error", {"msg": "Only the first mate can use drone"})
+        return emit("error", {"msg": "Only the tactical officer can use scanner probe"})
     if g["game"]["phase"] != "playing":
         return emit("error", {"msg": "Game is not in playing phase"})
 
@@ -1564,7 +1564,7 @@ def _check_turn_auto_advance(game_id, game):
             ok, msg, events = gs.captain_surface(game, team)
             if ok:
                 socketio.emit("blackout_announced",
-                              {"team": team, "msg": "No valid moves — surfacing!"}, room=game_id)
+                              {"team": team, "msg": "No valid moves — decloaking!"}, room=game_id)
                 _dispatch_events(game_id, game, events)
 
     _broadcast_game_state(game_id)
@@ -1574,5 +1574,5 @@ def _check_turn_auto_advance(game_id, game):
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("Starting Captain Sonar server on http://localhost:5000")
+    print("Starting Admiral Radar server on http://localhost:5000")
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)

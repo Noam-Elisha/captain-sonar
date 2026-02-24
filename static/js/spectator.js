@@ -1,7 +1,7 @@
 /* ============================================================
-   Captain Sonar — spectator.js
-   Full-visibility observer: sees both submarines, all systems,
-   all engineering boards, and watches radio operators' drawings.
+   Admiral Radar — spectator.js
+   Full-visibility observer: sees both starships, all systems,
+   all engineering boards, and watches signals officers' drawings.
    ============================================================ */
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -10,14 +10,14 @@ const MAP_LABEL = 24;
 const ISLAND_SET = new Set(ISLANDS.map(([r, c]) => `${r},${c}`));
 
 const SYSTEM_MAX    = { torpedo: 3, mine: 3, sonar: 3, drone: 4, stealth: 5 };
-const SYSTEM_LABELS = { torpedo: '🚀 Torpedo', mine: '💣 Mine', sonar: '📡 Sonar', drone: '🛸 Drone', stealth: '👻 Stealth' };
+const SYSTEM_LABELS = { torpedo: '🚀 Plasma Torpedo', mine: '💠 Space Mine', sonar: '📡 Sensors', drone: '🛸 Probe', stealth: '✨ Warp Jump' };
 const SYSTEM_COLOR  = { torpedo: 'col-red', mine: 'col-red', sonar: 'col-green', drone: 'col-green', stealth: 'col-yellow' };
 const ENG_DIR_ORDER = ['west', 'north', 'south', 'east'];
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let lastBlue = null, lastRed = null;
 
-// RO canvas layers (one per team)
+// Signals officer canvas layers (one per team)
 let roCanvases = {};   // { blue: {canvas, ctx}, red: {canvas, ctx} }
 
 // ── Socket ────────────────────────────────────────────────────────────────────
@@ -51,40 +51,40 @@ socket.on('direction_announced', data => {
 
 socket.on('surface_announced', data => {
   const t = data.team;
-  logEvent(`${t === 'blue' ? '🔵' : '🔴'} [${t.toUpperCase()}] SURFACED in sector ${data.sector} ⚠`, 'danger');
-  addMoveTag(t, '⚓', 'surface');
+  logEvent(`${t === 'blue' ? '🔵' : '🔴'} [${t.toUpperCase()}] DECLOAKED in quadrant ${data.sector} ⚠`, 'danger');
+  addMoveTag(t, '🛸', 'surface');
   setSurfaced(t, true);
 });
 
 socket.on('dive_announced', data => {
-  logEvent(`${data.team === 'blue' ? '🔵' : '🔴'} [${data.team.toUpperCase()}] dived back down`);
+  logEvent(`${data.team === 'blue' ? '🔵' : '🔴'} [${data.team.toUpperCase()}] re-cloaked`);
   setSurfaced(data.team, false);
 });
 
 socket.on('torpedo_fired', data => {
-  logEvent(`🚀 [${data.team.toUpperCase()}] fired torpedo → (${data.row + 1}, ${data.col + 1})`, 'danger');
+  logEvent(`🚀 [${data.team.toUpperCase()}] fired plasma torpedo → (${data.row + 1}, ${data.col + 1})`, 'danger');
   flashExplosion(data.row, data.col, '#f97316');
 });
 
 socket.on('mine_detonated', data => {
-  logEvent(`💥 [${data.team.toUpperCase()}] detonated mine at (${data.row + 1}, ${data.col + 1})`, 'danger');
+  logEvent(`💥 [${data.team.toUpperCase()}] detonated space mine at (${data.row + 1}, ${data.col + 1})`, 'danger');
   flashExplosion(data.row, data.col, '#ef4444');
 });
 
 socket.on('stealth_announced', data => {
   const t = data.team;
-  logEvent(`👻 [${t.toUpperCase()}] used STEALTH — ${data.steps} silent step(s)`, 'stealth');
-  addMoveTag(t, '👻', 'stealth');
+  logEvent(`✨ [${t.toUpperCase()}] used WARP JUMP — ${data.steps} silent step(s)`, 'stealth');
+  addMoveTag(t, '✨', 'stealth');
 });
 
 socket.on('damage', data => {
   const cause = data.cause === 'system_failure' ? ' (system failure)'
-              : data.cause === 'surface'         ? ' (surfaced)'      : '';
-  logEvent(`💥 [${data.team.toUpperCase()}] took ${data.amount} damage${cause} (${data.health} HP remain)`, 'danger');
+              : data.cause === 'surface'         ? ' (decloaked)'      : '';
+  logEvent(`💥 [${data.team.toUpperCase()}] took ${data.amount} damage${cause} (${data.health} hull remain)`, 'danger');
 });
 
-socket.on('sonar_announced', data => logEvent(`📡 [${data.team.toUpperCase()}] used sonar`));
-socket.on('drone_announced', data => logEvent(`🛸 [${data.team.toUpperCase()}] drone → sector ${data.sector}`));
+socket.on('sonar_announced', data => logEvent(`📡 [${data.team.toUpperCase()}] used sensor sweep`));
+socket.on('drone_announced', data => logEvent(`🛸 [${data.team.toUpperCase()}] probe → quadrant ${data.sector}`));
 
 socket.on('sonar_result', data => {
   const fmtVal = (type, val) => {
@@ -94,7 +94,7 @@ socket.on('sonar_result', data => {
   };
   const t = data.target;
   logEvent(
-    `📡 [${t.toUpperCase()}] sonar: enemy replied "${fmtVal(data.type1, data.val1)}" & "${fmtVal(data.type2, data.val2)}" (1 true, 1 false)`,
+    `📡 [${t.toUpperCase()}] sensors: enemy replied "${fmtVal(data.type1, data.val1)}" & "${fmtVal(data.type2, data.val2)}" (1 true, 1 false)`,
     t === 'blue' ? 'blue' : 'red'
   );
 });
@@ -102,10 +102,10 @@ socket.on('sonar_result', data => {
 socket.on('drone_result', data => {
   const t = data.target;
   const result = data.in_sector ? 'YES 🎯' : 'NO — clear';
-  logEvent(`🛸 [${t.toUpperCase()}] drone sector ${data.ask_sector}: ${result}`, t === 'blue' ? 'blue' : 'red');
+  logEvent(`🛸 [${t.toUpperCase()}] probe quadrant ${data.ask_sector}: ${result}`, t === 'blue' ? 'blue' : 'red');
 });
 
-// RO pan relay — sync the radio operator's pan position onto their canvas overlay
+// Signals officer pan relay — sync the signals officer's pan position onto their canvas overlay
 socket.on('ro_pan', data => {
   const layer = roCanvases[data.team];
   if (!layer || !layer.canvas) return;
@@ -130,14 +130,14 @@ socket.on('game_over', data => {
 });
 
 socket.on('sub_placed', data => {
-  logEvent(`${data.team === 'blue' ? '🔵' : '🔴'} [${data.team.toUpperCase()}] submarine placed`, data.team);
+  logEvent(`${data.team === 'blue' ? '🔵' : '🔴'} [${data.team.toUpperCase()}] starship placed`, data.team);
 });
 
 socket.on('bot_chat', data => { logEvent(`🤖 [${data.name}]: ${data.msg}`, 'bot'); });
 
 socket.on('error', data => { logEvent(`⚠ ${data.msg}`, 'danger'); });
 
-// ── RO canvas relay ───────────────────────────────────────────────────────────
+// ── Signals Officer canvas relay ──────────────────────────────────────────────
 socket.on('ro_canvas_stroke', data => {
   const team = data.team;
   const layer = roCanvases[team];
@@ -211,7 +211,7 @@ function renderHealth(id, hp, max) {
   for (let i = 0; i < max; i++) {
     const s = document.createElement('span');
     s.className   = 'health-heart' + (i < hp ? '' : ' empty');
-    s.textContent = i < hp ? '❤️' : '🖤';
+    s.textContent = i < hp ? '🛡️' : '💔';
     el.appendChild(s);
   }
 }
@@ -421,11 +421,11 @@ function renderMap() {
   const svg = document.getElementById('spec-svg');
   if (svg) { svg.setAttribute('width', totalW); svg.setAttribute('height', totalH); }
 
-  // Initialise RO drawing canvas layers
+  // Initialise signals officer drawing canvas layers
   initROCanvases(totalW, totalH);
 }
 
-// ── RO canvas layers (blue + red) ─────────────────────────────────────────────
+// ── Signals officer canvas layers (blue + red) ───────────────────────────────
 function initROCanvases(w, h) {
   ['blue', 'red'].forEach(team => {
     const canvasEl = document.getElementById(`ro-canvas-${team}`);
@@ -437,7 +437,7 @@ function initROCanvases(w, h) {
   });
 }
 
-// ── SVG overlay for subs, trails, mines ───────────────────────────────────────
+// ── SVG overlay for starships, trails, mines ──────────────────────────────────
 function cellCenter(row, col) {
   return {
     x: MAP_LABEL + col * CELL_PX + CELL_PX / 2,
@@ -507,7 +507,7 @@ function drawSub(svg, ns, x, y, fillColor, glowColor) {
   t.setAttribute('x', x); t.setAttribute('y', y + 4);
   t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '10');
   t.setAttribute('fill', '#fff'); t.setAttribute('pointer-events', 'none');
-  t.textContent = '⛵';
+  t.textContent = '🚀';
   svg.appendChild(t);
 }
 
@@ -558,5 +558,5 @@ document.addEventListener('DOMContentLoaded', () => {
   renderMap();
   renderHealth('blue-health', 4, 4);
   renderHealth('red-health',  4, 4);
-  logEvent('👁 Spectator view loaded — waiting for game state…', 'highlight');
+  logEvent('👁 Observer view loaded — waiting for game state…', 'highlight');
 });

@@ -1,6 +1,6 @@
 /* ============================================================
-   Captain Sonar — first_mate.js
-   FM charges systems and activates green systems (sonar/drone).
+   Admiral Radar — first_mate.js
+   Tactical Officer charges systems and activates green systems (sensors/probe).
    ============================================================ */
 
 // GAME_ID, MY_NAME, MY_TEAM, MAP_ROWS, MAP_COLS injected by template
@@ -8,11 +8,11 @@
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
 
 const SYS_DEF = {
-  torpedo: {label:'🚀 Torpedo', max:6, color:'red',    desc:'Captain fires — range 4'},
-  mine:    {label:'💣 Mine',    max:6, color:'red',    desc:'Captain places N/S/E/W adjacent (after moving)'},
-  sonar:   {label:'📡 Sonar',  max:6, color:'green',  desc:'YOU activate — ask row/col/sector'},
-  drone:   {label:'🛸 Drone',  max:6, color:'green',  desc:'YOU activate — confirm sector'},
-  stealth: {label:'👻 Stealth',max:4, color:'yellow', desc:'Captain moves silently 0–4 steps'},
+  torpedo: {label:'🚀 Plasma Torpedo', max:6, color:'red',    desc:'Commander fires — range 4'},
+  mine:    {label:'💠 Space Mine',     max:6, color:'red',    desc:'Commander places N/S/E/W adjacent (after moving)'},
+  sonar:   {label:'📡 Sensors',        max:6, color:'green',  desc:'YOU activate — ask row/col/quadrant'},
+  drone:   {label:'🛸 Probe',          max:6, color:'green',  desc:'YOU activate — confirm quadrant'},
+  stealth: {label:'✨ Warp Jump',      max:4, color:'yellow', desc:'Commander warps silently 0–4 steps'},
 };
 
 let systems       = {torpedo:{charge:0}, mine:{charge:0}, sonar:{charge:0}, drone:{charge:0}, stealth:{charge:0}};
@@ -20,7 +20,7 @@ let myHealth      = 4;
 let canCharge     = false;
 let isMyTurn      = false;
 let systemUsed    = false;
-let movedThisTurn = false;  // RULEBOOK TBT: systems activate after course announcement
+let movedThisTurn = false;  // RULEBOOK TBT: systems activate after navigation announcement
 
 const socket = io();
 
@@ -39,10 +39,10 @@ socket.on('game_state', state => {
   const moved      = ts.moved || false;
   const fmDone     = ts.first_mate_done || false;
   const dir        = ts.direction;
-  const stealthDir = ts.stealth_direction; // private — only own team's FM sees this
+  const stealthDir = ts.stealth_direction; // private — only own team's tactical officer sees this
   systemUsed    = ts.system_used || false;
   movedThisTurn = moved;
-  // canCharge on normal move OR stealth move (but NOT after surfacing)
+  // canCharge on normal move OR warp jump move (but NOT after decloaking)
   canCharge     = isMyTurn && moved && !fmDone && !!(dir || stealthDir);
 
   renderAll();
@@ -61,8 +61,8 @@ socket.on('can_charge', data => {
   canCharge = true;
   renderSystems();
   const msg = (data && data.is_stealth)
-    ? '👻 Stealth move — charge a system now!'
-    : 'Captain moved — charge a system now!';
+    ? '✨ Warp jump — charge a system now!'
+    : 'Commander navigated — charge a system now!';
   logEvent(msg, 'highlight');
   document.getElementById('charge-overlay').classList.add('hidden');
 });
@@ -78,7 +78,7 @@ socket.on('turn_start', data => {
     // Don't clutter the log with "X team's turn" every turn
   } else {
     document.getElementById('charge-overlay').classList.add('hidden');
-    logEvent('OUR TURN — wait for captain to move, then charge', 'highlight');
+    logEvent('OUR TURN — wait for commander to navigate, then charge', 'highlight');
   }
 });
 
@@ -87,33 +87,33 @@ socket.on('damage', data => {
     myHealth = data.health;
     renderHealth();
     const cause = data.cause === 'system_failure' ? '⚡ System failure! '
-                : data.cause === 'surface'         ? '🌊 Surfaced! '      : '💥 ';
-    logEvent(`${cause}We took ${data.amount} damage (${data.health} HP)`, 'danger');
+                : data.cause === 'surface'         ? '⚠ Decloaked! '      : '💥 ';
+    logEvent(`${cause}We took ${data.amount} damage (${data.health} hull)`, 'danger');
   } else {
     const cause = data.cause === 'system_failure' ? '⚡ Enemy system failure '
-                : data.cause === 'surface'         ? '🌊 Enemy surfaced! '  : '💥 Enemy took ';
+                : data.cause === 'surface'         ? '⚠ Enemy decloaked! '  : '💥 Enemy took ';
     logEvent(`${cause}${data.amount} damage`, 'danger');
   }
 });
 
 socket.on('surface_announced', data => {
-  // RULEBOOK (TBT): surfacing does NOT cost HP; enemy gets 3 bonus turns
+  // RULEBOOK (TBT): decloaking does NOT cost hull; enemy gets 3 bonus turns
   if (data.team === MY_TEAM) {
-    logEvent(`You surfaced in sector ${data.sector} — trail + engineering cleared. Enemy gets 3 bonus turns!`, 'warning');
+    logEvent(`You decloaked in quadrant ${data.sector} — trail + engineering cleared. Enemy gets 3 bonus turns!`, 'warning');
   } else {
-    logEvent(`Enemy surfaced in sector ${data.sector}! We get 3 bonus turns!`, 'highlight');
+    logEvent(`Enemy decloaked in quadrant ${data.sector}! We get 3 bonus turns!`, 'highlight');
   }
 });
 
 socket.on('sonar_announced', data => {
   if (data.team === MY_TEAM) {
-    logEvent('📡 Sonar activated — waiting for enemy captain to respond…');
+    logEvent('📡 Sensor sweep activated — waiting for enemy commander to respond…');
   } else {
-    logEvent('📡 Enemy used sonar on us — our captain must respond');
+    logEvent('📡 Enemy used sensor sweep on us — our commander must respond');
   }
 });
 
-// RULEBOOK sonar_result: 2 pieces of info from enemy captain (1 true, 1 false)
+// RULEBOOK sensor result: 2 pieces of info from enemy commander (1 true, 1 false)
 // Broadcast to whole room — use data.target to determine if we are the activating team
 socket.on('sonar_result', data => {
   const fmtVal = (type, val) => {
@@ -124,44 +124,44 @@ socket.on('sonar_result', data => {
   const info1 = fmtVal(data.type1, data.val1);
   const info2 = fmtVal(data.type2, data.val2);
   if (data.target === MY_TEAM) {
-    // Our sonar — enemy captain responded with these values
-    showToast(`Sonar: "${info1}" and "${info2}" — 1 is true, 1 is false!`);
-    logEvent(`📡 Sonar: enemy said "${info1}" AND "${info2}" (one is true, one is false — deduce!)`, 'highlight');
+    // Our sensors — enemy commander responded with these values
+    showToast(`Sensors: "${info1}" and "${info2}" — 1 is true, 1 is false!`);
+    logEvent(`📡 Sensors: enemy said "${info1}" AND "${info2}" (one is true, one is false — deduce!)`, 'highlight');
     systemUsed = true;
     renderSystems();
   } else {
-    // Enemy sonar — they reported these values (both teams hear the result)
-    logEvent(`📡 Enemy sonar result: they reported "${info1}" and "${info2}"`);
+    // Enemy sensors — they reported these values (both teams hear the result)
+    logEvent(`📡 Enemy sensor result: they reported "${info1}" and "${info2}"`);
   }
 });
 
-// RULEBOOK blackout: no valid moves → auto-surface
+// RULEBOOK blackout: no valid moves → auto-decloak
 socket.on('blackout_announced', data => {
   if (data.team === MY_TEAM) {
-    logEvent('⚠ BLACKOUT — no valid moves, sub surfaced automatically!', 'danger');
+    logEvent('⚠ BLACKOUT — no valid moves, starship decloaked automatically!', 'danger');
   } else {
-    logEvent('⚠ Enemy blackout — they surfaced automatically! We get 3 bonus turns!', 'highlight');
+    logEvent('⚠ Enemy blackout — they decloaked automatically! We get 3 bonus turns!', 'highlight');
   }
 });
 
 // Circuit cleared event
 socket.on('circuit_cleared', data => {
   if (data.team === MY_TEAM) {
-    logEvent(`🔄 Circuit C${data.circuit} completed — nodes cleared (no damage)`, 'good');
+    logEvent(`🔄 Circuit C${data.circuit} repaired — nodes cleared (no damage)`, 'good');
   }
 });
 
 // Broadcast to whole room — use data.target to determine if we are the activating team
 socket.on('drone_result', data => {
   if (data.target === MY_TEAM) {
-    // Our drone result
-    showToast(data.in_sector ? `🛸 Drone: Enemy IS in sector ${data.ask_sector}! 🎯` : `🛸 Drone: Enemy NOT in sector ${data.ask_sector}`);
-    logEvent(`🛸 Drone sector ${data.ask_sector}: ${data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear'}`, 'highlight');
+    // Our probe result
+    showToast(data.in_sector ? `🛸 Probe: Enemy IS in quadrant ${data.ask_sector}! 🎯` : `🛸 Probe: Enemy NOT in quadrant ${data.ask_sector}`);
+    logEvent(`🛸 Probe quadrant ${data.ask_sector}: ${data.in_sector ? 'YES — CONTACT! 🎯' : 'NO — clear'}`, 'highlight');
     systemUsed = true;
     renderSystems();
   } else {
-    // Enemy drone (we hear the result too — both teams hear in physical game)
-    logEvent(`🛸 Enemy drone sector ${data.ask_sector}: ${data.in_sector ? 'contact on us!' : 'clear'}`);
+    // Enemy probe (we hear the result too — both teams hear in physical game)
+    logEvent(`🛸 Enemy probe quadrant ${data.ask_sector}: ${data.in_sector ? 'contact on us!' : 'clear'}`);
   }
 });
 
@@ -174,7 +174,7 @@ socket.on('game_over', data => {
 socket.on('error', data => showToast(data.msg, true));
 
 socket.on('bot_chat', data => {
-  const icons = {captain:'🤖🎖', first_mate:'🤖⚙', engineer:'🤖🔧', radio_operator:'🤖📡'};
+  const icons = {captain:'🤖🌟', first_mate:'🤖⚔', engineer:'🤖⚡', radio_operator:'🤖📡'};
   logEvent(`${icons[data.role]||'🤖'} [${data.name}]: ${data.msg}`, 'bot');
 });
 
@@ -188,7 +188,7 @@ function renderHealth() {
   for (let i = 0; i < 4; i++) {
     const s = document.createElement('span');
     s.className   = 'health-heart' + (i < myHealth ? '' : ' empty');
-    s.textContent = i < myHealth ? '❤️' : '🖤';
+    s.textContent = i < myHealth ? '🛡️' : '💔';
     el.appendChild(s);
   }
 }
@@ -202,7 +202,7 @@ function renderSystems() {
     const max   = s.max    || meta.max;
     const ready = s.ready  || (cur >= max);
     const isGreen     = (sys === 'sonar' || sys === 'drone');
-    // RULEBOOK TBT: FM can only activate systems AFTER the captain has announced a course
+    // RULEBOOK TBT: Tactical Officer can only activate systems AFTER the commander has announced a course
     const canActivate = isGreen && ready && isMyTurn && !systemUsed && movedThisTurn;
 
     const card     = document.createElement('div');
@@ -255,7 +255,7 @@ function renderSystems() {
     if (isGreen) {
       const actBtn     = document.createElement('button');
       actBtn.className = 'btn-activate';
-      actBtn.textContent = sys === 'sonar' ? '📡 Use Sonar' : '🛸 Use Drone';
+      actBtn.textContent = sys === 'sonar' ? '📡 Use Sensors' : '🛸 Use Probe';
       actBtn.disabled    = !canActivate;
       actBtn.onclick     = () => activateSystem(sys);
       card.appendChild(actBtn);
@@ -277,16 +277,16 @@ function activateSystem(sys) {
   else if (sys === 'drone') openDrone();
 }
 
-// ── Sonar (RULEBOOK: just activate — enemy captain responds) ──────────────────
+// ── Sensors (RULEBOOK: just activate — enemy commander responds) ──────────────────
 function openSonar()  { document.getElementById('sonar-modal').classList.remove('hidden'); }
 function closeSonar() { document.getElementById('sonar-modal').classList.add('hidden');    }
 function submitSonar() {
   closeSonar();
-  // RULEBOOK: no ask params — enemy captain provides 2 pieces of info interactively
+  // RULEBOOK: no ask params — enemy commander provides 2 pieces of info interactively
   socket.emit('first_mate_sonar', {game_id: GAME_ID, name: MY_NAME});
 }
 
-// ── Drone ─────────────────────────────────────────────────────
+// ── Probe ─────────────────────────────────────────────────────
 function openDrone() {
   document.getElementById('drone-modal').classList.remove('hidden');
   renderDroneMap();
@@ -317,7 +317,7 @@ function renderDroneMap() {
     ? new Set(ISLANDS.map(([r, c]) => `${r},${c}`))
     : new Set();
 
-  // Draw water/island cells
+  // Draw space/asteroid cells
   for (let r = 0; r < MAP_ROWS; r++) {
     for (let c = 0; c < MAP_COLS; c++) {
       ctx.fillStyle = islandSet.has(`${r},${c}`) ? '#475569' : '#0f172a';

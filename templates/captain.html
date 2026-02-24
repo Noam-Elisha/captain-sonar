@@ -3,28 +3,28 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Captain – Captain Sonar</title>
+  <title>Commander – Admiral Radar</title>
   <link rel="stylesheet" href="/static/css/base.css"/>
   <link rel="stylesheet" href="/static/css/captain.css"/>
 </head>
 <body class="role-captain team-{{ team }}">
 <!-- Turn lock overlay -->
 <div id="lock-overlay" class="lock-overlay hidden">
-  <p id="lock-msg">Waiting for other team…</p>
+  <p id="lock-msg">Waiting for other fleet…</p>
 </div>
 
 <!-- Placement overlay -->
 <div id="placement-overlay" class="placement-overlay">
   <div class="placement-card">
-    <h2>⚓ Place Your Submarine</h2>
-    <p>Click any water tile to deploy</p>
+    <h2>🛸 Deploy Your Starship</h2>
+    <p>Click any space tile to deploy</p>
   </div>
 </div>
 
-<!-- Sonar respond modal (shown when enemy uses sonar — enemy captain must respond) -->
+<!-- Sensor sweep respond modal (shown when enemy uses sensors — enemy commander must respond) -->
 <div id="sonar-respond-modal" class="modal hidden">
   <div class="modal-card">
-    <h3>📡 Enemy Sonar Detected!</h3>
+    <h3>📡 Enemy Sensor Sweep Detected!</h3>
     <p>You must give <strong>2 pieces of info</strong>: exactly <strong>1 true</strong> and <strong>1 false</strong>, of different types.</p>
     <div id="sonar-respond-position" style="text-align:center;font-size:.8rem;color:var(--text-muted);margin:.5rem 0;padding:.4rem;background:rgba(255,255,255,.05);border-radius:4px;"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:.8rem 0;">
@@ -33,7 +33,7 @@
         <select id="sonar-type1" class="sonar-select" onchange="updateSonarHint()">
           <option value="row">Row (1–{{ map_rows }})</option>
           <option value="col">Column (1–{{ map_cols }})</option>
-          <option value="sector">Sector (1–4)</option>
+          <option value="sector">Quadrant (1–4)</option>
         </select>
       </div>
       <div>
@@ -45,7 +45,7 @@
         <select id="sonar-type2" class="sonar-select" onchange="updateSonarHint()">
           <option value="col">Column (1–{{ map_cols }})</option>
           <option value="row">Row (1–{{ map_rows }})</option>
-          <option value="sector">Sector (1–4)</option>
+          <option value="sector">Quadrant (1–4)</option>
         </select>
       </div>
       <div>
@@ -60,13 +60,13 @@
   </div>
 </div>
 
-<!-- Stealth modal -->
+<!-- Warp jump modal -->
 <div id="stealth-modal" class="modal hidden">
   <div class="modal-card">
-    <h3>👻 Stealth (Silence)</h3>
-    <p style="font-size:.85rem;color:var(--text-muted);margin:.2rem 0 .8rem">Move silently — pick a direction and 0–4 steps. Enemy radio operator won't know your direction!</p>
+    <h3>✨ Warp Jump (Silent Running)</h3>
+    <p style="font-size:.85rem;color:var(--text-muted);margin:.2rem 0 .8rem">Move silently — pick a direction and 0–4 steps. Enemy signals officer won't know your heading!</p>
 
-    <!-- Compass direction selector (3×3 grid: N top, W left, E right, S bottom) -->
+    <!-- Compass direction selector -->
     <div style="display:grid;grid-template-columns:1fr auto 1fr;grid-template-rows:auto auto auto;gap:.35rem;margin:0 auto .7rem;max-width:200px;align-items:center;justify-items:center;">
       <div></div>
       <button id="sdir-north" class="move-add-btn stealth-sel" onclick="setStealthDir('north')" style="min-width:54px;font-size:1rem">↑ N</button>
@@ -96,7 +96,7 @@
 
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeStealth()">Cancel</button>
-      <button id="btn-execute-stealth" class="btn-confirm" onclick="submitStealth()" disabled>Execute Stealth</button>
+      <button id="btn-execute-stealth" class="btn-confirm" onclick="submitStealth()" disabled>Execute Warp</button>
     </div>
   </div>
 </div>
@@ -105,7 +105,7 @@
 <div id="result-toast" class="result-toast hidden"></div>
 
 <div class="app-layout">
-  <!-- LEFT: map -->
+  <!-- LEFT: star chart -->
   <div class="map-panel">
     <div class="map-wrapper">
       <div id="map-grid" class="map-grid"></div>
@@ -115,44 +115,44 @@
   <!-- RIGHT: controls -->
   <div class="ctrl-panel">
     <div class="role-header team-{{ team }}">
-      <span class="role-title">🎖 CAPTAIN</span>
-      <span class="team-badge">{{ team | upper }} TEAM</span>
+      <span class="role-title">🌟 COMMANDER</span>
+      <span class="team-badge">{{ team | upper }} FLEET</span>
     </div>
 
-    <!-- Own Health only (captain doesn't know enemy health) -->
+    <!-- Own Health only (commander doesn't know enemy health) -->
     <div class="panel-section">
       <div class="section-label">HULL INTEGRITY</div>
       <div class="health-row fixed-health" id="own-health"></div>
     </div>
 
-    <!-- Weapons — captain fires blind (ask first mate for charge status) -->
+    <!-- Weapons — commander fires blind (ask tactical officer for charge status) -->
     <div class="panel-section">
-      <div class="section-label">WEAPONS &amp; SYSTEMS <span class="section-hint">ask first mate for status</span></div>
+      <div class="section-label">WEAPONS &amp; SYSTEMS <span class="section-hint">ask tactical officer for status</span></div>
       <div class="weapons-grid">
-        <button class="weapon-btn torpedo-btn" onclick="enterTargetMode('torpedo')">🚀 Fire Torpedo</button>
-        <button class="weapon-btn mine-btn"    onclick="enterTargetMode('mine')">💣 Place Mine</button>
-        <button class="weapon-btn stealth-btn" onclick="openStealth()">👻 Stealth</button>
+        <button class="weapon-btn torpedo-btn" onclick="enterTargetMode('torpedo')">🚀 Plasma Torpedo</button>
+        <button class="weapon-btn mine-btn"    onclick="enterTargetMode('mine')">💠 Space Mine</button>
+        <button class="weapon-btn stealth-btn" onclick="openStealth()">✨ Warp Jump</button>
       </div>
     </div>
 
     <!-- Movement -->
     <div class="panel-section" id="move-panel">
-      <div class="section-label">MOVEMENT</div>
+      <div class="section-label">NAVIGATION</div>
       <div class="compass">
         <button class="compass-btn north" onclick="doMove('north')" id="btn-north">↑ N</button>
         <div class="compass-middle">
           <button class="compass-btn west"    onclick="doMove('west')" id="btn-west">← W</button>
-          <button class="compass-btn surface" onclick="doSurface()" id="btn-surface">⚠ SURFACE</button>
+          <button class="compass-btn surface" onclick="doSurface()" id="btn-surface">⚠ DECLOAK</button>
           <button class="compass-btn east"    onclick="doMove('east')" id="btn-east">E →</button>
         </div>
         <button class="compass-btn south" onclick="doMove('south')" id="btn-south">↓ S</button>
       </div>
-      <button class="btn-dive hidden" id="btn-dive" onclick="doDive()">🤿 DIVE</button>
+      <button class="btn-dive hidden" id="btn-dive" onclick="doDive()">🛡 RE-CLOAK</button>
     </div>
 
-    <!-- Mine detonation — also click 💣 on map -->
+    <!-- Mine detonation -->
     <div class="panel-section" id="mine-det-panel" style="display:none">
-      <div class="section-label">MINES PLACED</div>
+      <div class="section-label">MINES DEPLOYED</div>
       <div id="mine-list"></div>
     </div>
 
@@ -166,7 +166,7 @@
 
     <!-- Event log -->
     <div class="panel-section flex-grow">
-      <div class="section-label">EVENT LOG</div>
+      <div class="section-label">COMMS LOG</div>
       <div class="event-log" id="event-log"></div>
     </div>
   </div>

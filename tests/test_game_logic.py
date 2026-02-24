@@ -158,7 +158,7 @@ def test_cannot_end_turn_without_moving():
     game = place_both(fresh_game())
     ok, msg, _ = gs.end_turn(game, "blue")
     assert not ok
-    assert "move" in msg.lower()
+    assert "navigate" in msg.lower() or "decloak" in msg.lower()
 
 
 def test_cannot_end_turn_without_engineer_mark():
@@ -179,7 +179,7 @@ def test_cannot_end_turn_without_fm_charge():
     # Don't charge FM
     ok, msg, _ = gs.end_turn(game, "blue")
     assert not ok, "Should require FM charge"
-    assert "first mate" in msg.lower()
+    assert "tactical officer" in msg.lower()
 
 
 def test_can_end_turn_after_all_roles():
@@ -287,7 +287,7 @@ def test_engineer_cannot_mark_without_move():
     game = place_both(fresh_game())
     ok, msg, _, _ = gs.engineer_mark(game, "blue", "east", 0)
     assert not ok
-    assert "captain" in msg.lower() or "moved" in msg.lower()
+    assert "commander" in msg.lower() or "navigated" in msg.lower()
 
 
 def test_engineer_marks_set_done_flag():

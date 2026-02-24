@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Engineer – Captain Sonar</title>
+  <title>Engineer – Admiral Radar</title>
   <link rel="stylesheet" href="/static/css/base.css"/>
   <link rel="stylesheet" href="/static/css/engineer.css"/>
 </head>
@@ -13,27 +13,27 @@
 <div class="app-layout">
   <div class="ctrl-panel full-width">
     <div class="role-header team-{{ team }}">
-      <span class="role-title">🔧 ENGINEER</span>
-      <span class="team-badge">{{ team | upper }} TEAM</span>
+      <span class="role-title">⚡ ENGINEER</span>
+      <span class="team-badge">{{ team | upper }} FLEET</span>
     </div>
 
     <!-- Health -->
     <div class="panel-section two-col">
       <div>
-        <div class="section-label">OWN HEALTH</div>
+        <div class="section-label">OWN HULL</div>
         <div class="health-row" id="own-health"></div>
       </div>
       <div>
-        <div class="section-label">ENEMY HEALTH</div>
+        <div class="section-label">ENEMY HULL</div>
         <div class="health-row" id="enemy-health"></div>
       </div>
     </div>
 
     <div class="section-label status-label" id="eng-status">
-      Waiting for captain to move…
+      Waiting for commander to navigate…
     </div>
 
-    <!-- Engineering board: 2×2 section layout (W/N top row, S/E bottom row) -->
+    <!-- Power Grid: 2×2 section layout (W/N top row, S/E bottom row) -->
     <div class="eng-board" id="eng-board">
 
       <!-- SVG overlay for inter-section circuit loops -->
@@ -106,14 +106,14 @@
     </div><!-- /.eng-board -->
 
     <div class="legend">
-      <span class="dot yellow"></span>Stealth
+      <span class="dot yellow"></span>Warp Drive
       <span class="dot red"></span>Torpedo/Mine
-      <span class="dot green"></span>Sonar/Drone
+      <span class="dot green"></span>Sensors/Probe
       <span class="dot radiation">☢</span>Radiation
     </div>
 
     <div class="panel-section">
-      <div class="section-label">EVENT LOG</div>
+      <div class="section-label">COMMS LOG</div>
       <div class="event-log" id="event-log"></div>
     </div>
   </div>

@@ -3,34 +3,34 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>First Mate – Captain Sonar</title>
+  <title>Tactical Officer – Admiral Radar</title>
   <link rel="stylesheet" href="/static/css/base.css"/>
   <link rel="stylesheet" href="/static/css/first_mate.css"/>
 </head>
 <body class="role-first_mate team-{{ team }}">
 <div id="charge-overlay" class="lock-overlay hidden">
-  <p>Waiting for captain to move…</p>
+  <p>Waiting for commander to navigate…</p>
 </div>
 <div id="result-toast" class="result-toast hidden"></div>
 
-<!-- Sonar modal (RULEBOOK: FM activates, then enemy captain must respond with 1 true + 1 false) -->
+<!-- Sensor sweep modal -->
 <div id="sonar-modal" class="modal hidden">
   <div class="modal-card">
-    <h3>📡 Sonar Ping</h3>
-    <p>Activate sonar — the <strong>enemy captain</strong> will be asked to reveal 2 pieces of info (1 true, 1 false, different types).</p>
-    <p style="font-size:.8rem;color:var(--text-muted);">You will receive their stated row/column/sector — use your radio operator map to deduce which is true!</p>
+    <h3>📡 Sensor Sweep</h3>
+    <p>Activate sensors — the <strong>enemy commander</strong> will be asked to reveal 2 pieces of info (1 true, 1 false, different types).</p>
+    <p style="font-size:.8rem;color:var(--text-muted);">You will receive their stated row/column/quadrant — use your signals officer's chart to deduce which is true!</p>
     <div class="modal-btns">
       <button class="btn-cancel"  onclick="closeSonar()">Cancel</button>
-      <button class="btn-confirm" onclick="submitSonar()">📡 Activate Sonar!</button>
+      <button class="btn-confirm" onclick="submitSonar()">📡 Activate Sensors!</button>
     </div>
   </div>
 </div>
 
-<!-- Drone modal -->
+<!-- Probe modal -->
 <div id="drone-modal" class="modal hidden">
   <div class="modal-card">
-    <h3>🛸 Drone Scan</h3>
-    <p>Click the sector you think the enemy is in:</p>
+    <h3>🛸 Scanner Probe</h3>
+    <p>Click the quadrant you think the enemy is in:</p>
     <canvas id="drone-map-canvas"></canvas>
     <div class="modal-btns"><button class="btn-cancel" onclick="closeDrone()">Cancel</button></div>
   </div>
@@ -39,18 +39,18 @@
 <div class="app-layout">
   <div class="ctrl-panel full-width">
     <div class="role-header team-{{ team }}">
-      <span class="role-title">⚙ FIRST MATE</span>
-      <span class="team-badge">{{ team | upper }} TEAM</span>
+      <span class="role-title">⚔ TACTICAL OFFICER</span>
+      <span class="team-badge">{{ team | upper }} FLEET</span>
     </div>
 
     <!-- Health (own only) -->
     <div class="panel-section">
-      <div class="section-label">OWN HEALTH</div>
+      <div class="section-label">HULL INTEGRITY</div>
       <div class="health-row fixed-health" id="own-health"></div>
     </div>
 
     <div class="section-label" style="margin:.6rem 1rem .3rem">
-      SYSTEMS — charge one per turn · activate green systems after captain moves
+      SYSTEMS — charge one per turn · activate green systems after commander navigates
     </div>
 
     <!-- Systems panel -->
@@ -60,7 +60,7 @@
 
     <!-- Event log -->
     <div class="panel-section flex-grow">
-      <div class="section-label">EVENT LOG</div>
+      <div class="section-label">COMMS LOG</div>
       <div class="event-log" id="event-log"></div>
     </div>
   </div>
