@@ -1,4 +1,4 @@
-/* ── Signals Officer styles (space theme) ── */
+/* ── Signals Officer styles (mission control theme) ── */
 
 .ro-toolbar {
   display: flex; gap: .5rem; align-items: center;
@@ -12,7 +12,7 @@
   font-size: .82rem; transition: all .2s;
 }
 .tool-btn:hover  { border-color: var(--accent); color: var(--text); }
-.tool-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tool-btn.active { background: var(--accent); border-color: var(--accent); color: #111; }
 .ro-hint { margin-left: auto; font-size: .78rem; color: var(--text-muted); font-style: italic; }
 
 /* Map wrapper for overlay */
@@ -32,8 +32,8 @@
 /* Map cell (read-only for RO) */
 .map-cell {
   width: 32px; height: 32px;
-  border: 1px solid #1a1a3e; border-radius: 3px;
-  background: #0a0a1f; position: relative;
+  border: 1px solid #2a2a30; border-radius: 3px;
+  background: #101014; position: relative;
   display: flex; align-items: center; justify-content: center;
 }
 

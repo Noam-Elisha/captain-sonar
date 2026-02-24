@@ -1,4 +1,4 @@
-/* ── Tactical Officer styles (space theme) ── */
+/* ── Tactical Officer styles (mission control theme) ── */
 
 .systems-panel {
   display: grid;
@@ -17,7 +17,7 @@
   transition: border-color .2s;
   position: relative;
 }
-.sys-card.can-charge { border-color: var(--team-primary, var(--accent)); box-shadow: 0 0 8px rgba(14,165,233,.2); }
+.sys-card.can-charge { border-color: var(--team-primary, var(--accent)); box-shadow: 0 0 8px rgba(200,168,50,.2); }
 .sys-card.is-ready   { border-color: #4ade80; }
 .sys-card.is-charged { animation: readyFlash .4s ease; }
 

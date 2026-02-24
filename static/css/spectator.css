@@ -1,5 +1,5 @@
 /* ============================================================
-   Admiral Radar — spectator.css (space theme)
+   Admiral Radar — spectator.css (mission control theme)
    ============================================================ */
 
 .spec-body {
@@ -54,7 +54,7 @@
 }
 .spec-turn-badge.blue-turn { background: var(--blue); color: #fff; border-color: var(--blue); }
 .spec-turn-badge.red-turn  { background: var(--red);  color: #fff; border-color: var(--red); }
-.spec-turn-badge.ended     { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+.spec-turn-badge.ended     { background: #c8a832; color: #111; border-color: #c8a832; }
 .spec-status {
   font-size: .78rem;
   color: var(--text-muted);
@@ -238,7 +238,7 @@
 .move-tag.blue    { background: rgba(37,99,235,.25);  color: var(--blue-light); }
 .move-tag.red     { background: rgba(220,38,38,.25);  color: var(--red-light); }
 .move-tag.surface { background: rgba(234,179,8,.2);   color: #fbbf24; }
-.move-tag.stealth { background: rgba(167,139,250,.2); color: #a78bfa; }
+.move-tag.stealth { background: rgba(200,168,50,.2);  color: #c8a832; }
 
 /* ── Map area ─────────────────────────────────────────────────── */
 .spec-map-area {
@@ -300,5 +300,5 @@
 .spec-event-log .log-entry.red       { border-left-color: var(--red-light);  color: var(--red-light); }
 .spec-event-log .log-entry.danger    { border-left-color: #fb923c; color: #fdba74; }
 .spec-event-log .log-entry.highlight { border-left-color: var(--accent); color: var(--text); font-weight:600; }
-.spec-event-log .log-entry.stealth   { border-left-color: #a78bfa; color: #c4b5fd; }
-.spec-event-log .log-entry.bot       { color: #a78bfa; }
+.spec-event-log .log-entry.stealth   { border-left-color: #c8a832; color: #dbc050; }
+.spec-event-log .log-entry.bot       { color: #c8a832; }
