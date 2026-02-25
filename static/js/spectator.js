@@ -133,7 +133,10 @@ socket.on('sub_placed', data => {
   logEvent(`${data.team === 'blue' ? '🔵' : '🔴'} [${data.team.toUpperCase()}] submarine placed`, data.team);
 });
 
-socket.on('bot_chat', data => { logEvent(`🤖 [${data.name}]: ${data.msg}`, 'bot'); });
+socket.on('bot_chat', data => {
+  const teamCls = data.team === 'blue' ? 'bot-blue' : data.team === 'red' ? 'bot-red' : 'bot';
+  logEvent(`🤖 [${data.name}]: ${data.msg}`, teamCls);
+});
 
 socket.on('error', data => { logEvent(`⚠ ${data.msg}`, 'danger'); });
 

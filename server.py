@@ -10,6 +10,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 import game_state as gs
 from maps import get_col_labels, MAPS
 from bots import CaptainBot, FirstMateBot, EngineerBot, RadioOperatorBot
+from comms import TeamComms
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -120,10 +121,24 @@ def _emit_to_team_role(game_id, team, role, event, data):
         socketio.emit(event, data, room=sid)
 
 
+def _emit_bot_chat_team_only(game_id, team, data):
+    """Emit bot_chat to ONLY this team's human players + all spectators.
+    Team-internal messages (RO reports, engineer marks, FM charges, placement)
+    must NOT leak to the enemy team."""
+    for sid in _team_role_sids(game_id, team=team):
+        socketio.emit("bot_chat", data, room=sid)
+    for spec in _get_spectators(game_id).values():
+        if spec.get("sid"):
+            socketio.emit("bot_chat", data, room=spec["sid"])
+
+
 def _dispatch_events(game_id, game, events):
-    """Route events from game_state to the correct clients."""
+    """Route events from game_state to the correct clients and TeamComms."""
     for ev in events:
         t = ev.get("type")
+
+        # Route every event through TeamComms (replaces ad-hoc bot update calls)
+        _route_event_to_comms(game_id, ev, game)
 
         if t == "moved":
             socketio.emit("direction_announced",
@@ -136,23 +151,17 @@ def _dispatch_events(game_id, game, events):
             _emit_to_team_role(game_id, ev["team"], "engineer", "direction_to_mark",
                                 {"direction": ev["direction"]})
             _emit_to_team_role(game_id, ev["team"], "first_mate", "can_charge", {})
-            # Update radio operator bot for enemy team
-            _update_ro_bot(game_id, ev["team"], "direction", direction=ev["direction"])
 
         elif t == "surfaced":
             socketio.emit("surface_announced",
                           {"team": ev["team"], "sector": ev["sector"],
                            "health": ev["health"]},
                           room=game_id)
-            # Update radio operator bot and captain bot
-            _update_ro_bot(game_id, ev["team"], "surface", sector=ev["sector"])
-            _update_captain_bot_enemy_surfaced(game_id, ev["team"], ev["sector"])
 
         elif t == "torpedo_fired":
             socketio.emit("torpedo_fired",
                           {"team": ev["team"], "row": ev["row"], "col": ev["col"]},
                           room=game_id)
-            _update_ro_bot(game_id, ev["team"], "torpedo", row=ev["row"], col=ev["col"])
 
         elif t == "damage":
             socketio.emit("damage",
@@ -227,9 +236,6 @@ def _dispatch_events(game_id, game, events):
             socketio.emit("sonar_result", result_data, room=game_id)
             _emit_to_team_role(game_id, target, "first_mate", "systems_update",
                                 {"systems": game["submarines"][target]["systems"]})
-            # Update captain bot sonar knowledge
-            _update_captain_bot_sonar(game_id, target,
-                                       ev["type1"], ev["val1"], ev["type2"], ev["val2"])
 
         elif t == "drone_used":
             socketio.emit("drone_announced",
@@ -247,9 +253,6 @@ def _dispatch_events(game_id, game, events):
             socketio.emit("drone_result", result_data, room=game_id)
             _emit_to_team_role(game_id, ev["target"], "first_mate", "systems_update",
                                 {"systems": game["submarines"][ev["target"]]["systems"]})
-            # Update captain bot drone knowledge (internal bot state only)
-            _update_captain_bot_drone(game_id, ev["target"],
-                                       ev.get("ask_sector", 0), ev["in_sector"])
 
         elif t == "stealth_used":
             socketio.emit("stealth_announced",
@@ -363,56 +366,150 @@ def _get_bot_for_role(game_id: str, team: str, role: str):
     return None
 
 
-def _update_ro_bot(game_id: str, moving_team: str, event_type: str, **kwargs):
-    """Notify radio-operator bots on the OTHER team about an enemy event."""
-    enemy_team = "red" if moving_team == "blue" else "blue"
-    ro = _get_bot_for_role(game_id, enemy_team, "radio_operator")
-    if ro and ro.get("bot"):
-        b = ro["bot"]
-        if event_type == "direction":
-            b.record_direction(kwargs["direction"])
-        elif event_type == "surface":
-            b.record_surface(kwargs["sector"])
-        elif event_type == "torpedo":
-            b.record_torpedo(kwargs.get("row", 0), kwargs.get("col", 0))
-        elif event_type == "drone":
-            b.record_drone(kwargs.get("sector", 0))
+def _get_team_comms(game_id: str, team: str):
+    """Return the TeamComms object for a team, or None."""
+    g = games.get(game_id)
+    if g and "comms" in g:
+        return g["comms"].get(team)
+    return None
 
 
-def _update_captain_bot_sonar(game_id, team, type1, val1, type2, val2):
-    """Update the captain bot's sonar knowledge (new interactive format)."""
+def _route_event_to_comms(game_id: str, ev: dict, game: dict):
+    """Route a game event to the appropriate TeamComms objects.
+    This replaces the old ad-hoc _update_ro_bot, _update_captain_bot_* functions.
+    Events go through TeamComms → bots read their inbox when it's their turn."""
+    t = ev.get("type")
+
+    if t == "moved":
+        # Other team hears the enemy move direction
+        other = gs.other_team(ev["team"])
+        comms = _get_team_comms(game_id, other)
+        if comms:
+            comms.relay_enemy_move(ev["direction"])
+
+    elif t == "surfaced":
+        # Other team hears enemy surfaced in a sector
+        other = gs.other_team(ev["team"])
+        comms = _get_team_comms(game_id, other)
+        if comms:
+            comms.relay_enemy_surface(ev["sector"])
+
+    elif t == "torpedo_fired":
+        # Other team hears enemy torpedo at exact coords
+        other = gs.other_team(ev["team"])
+        comms = _get_team_comms(game_id, other)
+        if comms:
+            comms.relay_enemy_torpedo(ev["row"], ev["col"])
+        # Own team's RO also hears the friendly torpedo
+        own_comms = _get_team_comms(game_id, ev["team"])
+        if own_comms:
+            own_comms.relay_friendly_torpedo(ev["row"], ev["col"])
+
+    elif t == "mine_placed":
+        # Other team hears a mine was placed (but not where)
+        other = gs.other_team(ev["team"])
+        comms = _get_team_comms(game_id, other)
+        if comms:
+            comms.relay_enemy_mine_placed()
+
+    elif t == "mine_detonated":
+        # Own team's RO hears the friendly mine detonation
+        own_comms = _get_team_comms(game_id, ev["team"])
+        if own_comms:
+            own_comms.relay_friendly_mine_detonated(ev["row"], ev["col"])
+
+    elif t == "sonar_result":
+        # Both RO and captain on the activating team hear the result
+        target = ev["target"]   # the activating team
+        comms = _get_team_comms(game_id, target)
+        if comms:
+            comms.relay_sonar_result(ev["type1"], ev["val1"], ev["type2"], ev["val2"])
+
+    elif t == "drone_result":
+        # Both RO and captain on the activating team hear the result
+        target = ev["target"]
+        comms = _get_team_comms(game_id, target)
+        if comms:
+            comms.relay_drone_result(ev.get("ask_sector", 0), ev["in_sector"])
+
+
+def _process_bot_comms_pre_turn(game_id: str, team: str):
+    """Process bot communications BEFORE the captain acts.
+    Flow: RO processes inbox → generates report → FM reports status →
+          Engineer recommends → Captain processes inbox."""
+    g = games[game_id]
+    comms = _get_team_comms(game_id, team)
+    if not comms:
+        return
+
+    # 1. RO processes events and generates position report for captain
+    ro = _get_bot_for_role(game_id, team, "radio_operator")
+    if ro and ro.get("bot") and ro["bot"].initialized:
+        msgs = comms.read_inbox("radio_operator")
+        ro["bot"].process_inbox(msgs)
+        summary = ro["bot"].generate_report(comms)
+        _emit_bot_chat_team_only(game_id, team, {
+            "team": team, "role": "radio_operator", "name": ro["name"],
+            "msg": f"📡 {summary}",
+        })
+
+    # 2. FM reports current system status to captain
+    fm = _get_bot_for_role(game_id, team, "first_mate")
+    if fm and fm.get("bot"):
+        sub = g["game"]["submarines"][team]
+        fm["bot"].send_communications(comms, sub["systems"])
+
+    # 3. Engineer recommends directions to captain
+    eng = _get_bot_for_role(game_id, team, "engineer")
+    if eng and eng.get("bot"):
+        sub = g["game"]["submarines"][team]
+        eng["bot"].send_communications(comms, sub["engineering"])
+
+    # 4. Captain processes all accumulated messages (RO report, FM status, Engineer recs)
     cap = _get_bot_for_role(game_id, team, "captain")
     if cap and cap.get("bot"):
-        cap["bot"].update_sonar_result(type1, val1, type2, val2)
+        msgs = comms.read_inbox("captain")
+        cap["bot"].process_inbox(msgs)
 
 
-def _update_captain_bot_drone(game_id, team, sector, in_sector):
-    """Update the captain bot's drone knowledge."""
+def _process_bot_comms_post_move(game_id: str, team: str):
+    """After captain moves, send priority communications to FM and Engineer."""
+    g = games[game_id]
+    comms = _get_team_comms(game_id, team)
+    if not comms:
+        return
+
+    # Captain sends priorities to FM and Engineer
     cap = _get_bot_for_role(game_id, team, "captain")
     if cap and cap.get("bot"):
-        cap["bot"].update_drone_result(sector, in_sector)
+        sub = g["game"]["submarines"][team]
+        cap["bot"].send_communications(comms, sub, g["game"]["map"])
 
+    # FM processes captain's new priority
+    fm = _get_bot_for_role(game_id, team, "first_mate")
+    if fm and fm.get("bot"):
+        msgs = comms.read_inbox("first_mate")
+        fm["bot"].process_inbox(msgs)
 
-def _update_captain_bot_enemy_surfaced(game_id, surfaced_team, sector):
-    """Update enemy captain bot's knowledge when a team surfaces."""
-    # The OTHER team's captain knows about the surfaced team's sector
-    enemy_team = "red" if surfaced_team == "blue" else "blue"
-    cap = _get_bot_for_role(game_id, enemy_team, "captain")
-    if cap and cap.get("bot"):
-        cap["bot"].update_enemy_surfaced(sector)
+    # Engineer processes captain's new system protection priority
+    eng = _get_bot_for_role(game_id, team, "engineer")
+    if eng and eng.get("bot"):
+        msgs = comms.read_inbox("engineer")
+        eng["bot"].process_inbox(msgs)
 
 
 def _emit_ro_bot_commentary(game_id: str, current_team: str):
-    """Emit radio-operator bot commentary for the team whose turn just started."""
+    """Emit radio-operator bot commentary for the team whose turn just started.
+    Uses the new position-tracking system."""
     ro = _get_bot_for_role(game_id, current_team, "radio_operator")
-    if ro and ro.get("bot"):
+    if ro and ro.get("bot") and ro["bot"].initialized:
         msg = ro["bot"].generate_commentary()
-        socketio.emit("bot_chat", {
+        _emit_bot_chat_team_only(game_id, current_team, {
             "team":  current_team,
             "role":  "radio_operator",
             "name":  ro["name"],
             "msg":   f"📡 {msg}",
-        }, room=game_id)
+        })
 
 
 # ── Bot execution loop ─────────────────────────────────────────────────────────
@@ -470,10 +567,10 @@ def _bot_placement_step(game_id: str, g: dict, game: dict) -> bool:
         ok, msg = gs.place_submarine(game, team, row, col)
         if ok:
             socketio.emit("sub_placed", {"team": team}, room=game_id)
-            socketio.emit("bot_chat", {
+            _emit_bot_chat_team_only(game_id, team, {
                 "team": team, "role": "captain", "name": cap["name"],
-                "msg": f"Placing submarine at row {row+1}, col {col+1} 🗺",
-            }, room=game_id)
+                "msg": "Submarine deployed 🗺",
+            })
             if game["phase"] == "playing":
                 current = gs.current_team(game)
                 socketio.emit("game_phase", {"current_team": current}, room=game_id)
@@ -513,12 +610,22 @@ def _bot_playing_step(game_id: str, g: dict, game: dict) -> bool:
             return _bot_sonar_respond(game_id, game, responding_team, enemy_cap)
         return False   # waiting for human enemy captain
 
+    # Step 0c — Process team communications before captain acts
+    # RO analyzes enemy movements, FM reports systems, Engineer recommends,
+    # Captain reads all of it to make an informed decision.
+    if not ts["moved"]:
+        _process_bot_comms_pre_turn(game_id, team)
+
     # Step 1 — Captain must move (or surface/weapon) if not yet moved
     if not ts["moved"]:
         cap = _get_bot_for_role(game_id, team, "captain")
         if cap is None:
             return False   # human captain — wait
-        return _bot_captain_action(game_id, g, game, team, cap)
+        acted = _bot_captain_action(game_id, g, game, team, cap)
+        if acted:
+            # After captain moves, send priority comms to FM and Engineer
+            _process_bot_comms_post_move(game_id, team)
+        return acted
 
     # Step 2 — Engineer marks (on normal move OR stealth move)
     has_dir = ts["direction"] is not None or ts.get("stealth_direction") is not None
@@ -601,7 +708,7 @@ def _bot_captain_action(game_id, g, game, team, cap_player) -> bool:
                 _broadcast_game_state(game_id)
                 socketio.emit("bot_chat", {
                     "team": team, "role": "captain", "name": name,
-                    "msg": f"✨ Silent Running: {steps} steps {direction}",
+                    "msg": f"✨ Silent Running: {steps} silent step(s)",
                 }, room=game_id)
                 return True
         # Stealth failed or no moves — surface
@@ -708,10 +815,10 @@ def _bot_engineer_action(game_id, g, game, team, eng_player) -> bool:
         _dispatch_events(game_id, game, events)
         _broadcast_game_state(game_id)
         desc = bot.describe_mark(direction, index)
-        socketio.emit("bot_chat", {
+        _emit_bot_chat_team_only(game_id, team, {
             "team": team, "role": "engineer", "name": eng_player["name"],
             "msg": f"🔧 {desc}",
-        }, room=game_id)
+        })
         return True
     return False
 
@@ -733,10 +840,10 @@ def _bot_fm_action(game_id, g, game, team, fm_player) -> bool:
         _emit_to_team_role(game_id, team, "first_mate", "systems_update",
                            {"systems": game["submarines"][team]["systems"]})
         _broadcast_game_state(game_id)
-        socketio.emit("bot_chat", {
+        _emit_bot_chat_team_only(game_id, team, {
             "team": team, "role": "first_mate", "name": fm_player["name"],
             "msg": f"⚙️ {bot.describe_charge(system)}",
-        }, room=game_id)
+        })
         return True
     # Charge failed (already full?); mark done
     game["turn_state"]["first_mate_done"] = True
@@ -1139,6 +1246,18 @@ def on_start_game(data):
     g["game"]["turn_order"] = teams_present
     g["game"]["active_team"] = teams_present[0]  # explicit active team for surface-bonus tracking
     g["game"]["phase"] = "placement"
+
+    # Initialize TeamComms for each team
+    g["comms"] = {
+        "blue": TeamComms("blue"),
+        "red":  TeamComms("red"),
+    }
+
+    # Initialize bots that need the map definition
+    for team in ["blue", "red"]:
+        ro = _get_bot_for_role(game_id, team, "radio_operator")
+        if ro and ro.get("bot"):
+            ro["bot"].initialize(g["game"]["map"])
 
     socketio.emit("game_started", {
         "map": {

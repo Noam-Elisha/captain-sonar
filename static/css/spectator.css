@@ -10,7 +10,7 @@
 /* ── Layout grid ─────────────────────────────────────────────── */
 .spec-layout {
   display: grid;
-  grid-template-rows: 46px minmax(0, 1fr) 150px;
+  grid-template-rows: 46px minmax(0, 1fr) 240px;
   height: 100vh;
   overflow: hidden;
 }
@@ -292,9 +292,9 @@
   line-height: 1.4;
   border-left: 2px solid transparent;
   padding-left: .4rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 .spec-event-log .log-entry.blue      { border-left-color: var(--blue-light); color: var(--blue-light); }
 .spec-event-log .log-entry.red       { border-left-color: var(--red-light);  color: var(--red-light); }
@@ -302,3 +302,5 @@
 .spec-event-log .log-entry.highlight { border-left-color: var(--accent); color: var(--text); font-weight:600; }
 .spec-event-log .log-entry.stealth   { border-left-color: #c8a832; color: #dbc050; }
 .spec-event-log .log-entry.bot       { color: #c8a832; }
+.spec-event-log .log-entry.bot-blue  { border-left-color: var(--blue-light); color: var(--blue-light); font-style: italic; }
+.spec-event-log .log-entry.bot-red   { border-left-color: var(--red-light);  color: var(--red-light);  font-style: italic; }
