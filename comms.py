@@ -86,6 +86,27 @@ class TeamComms:
                 return msg
         return None
 
+    # ── Human player messaging ────────────────────────────────────────────────
+
+    def post_from_human(self, from_role: str, msg_type: str, data: dict = None):
+        """Post a message from a human player into the comms system."""
+        msg = {"type": msg_type, "from": from_role, "human": True}
+        if data:
+            msg.update(data)
+
+        if msg_type == "request_position_report":
+            self._inboxes["radio_operator"].append(msg)
+        elif msg_type == "set_charge_priority":
+            self._inboxes["first_mate"].append(msg)
+        elif msg_type == "set_system_protect":
+            self._inboxes["engineer"].append(msg)
+        elif msg_type == "report_positions":
+            self._inboxes["captain"].append(msg)
+        elif msg_type == "status_report":
+            self._inboxes["captain"].append(msg)
+        elif msg_type == "recommend_directions":
+            self._inboxes["captain"].append(msg)
+
     # ── Enemy event relay ────────────────────────────────────────────────────
     # Called by the server when public game events happen.
     # These go to BOTH radio_operator AND captain (per COMMUNICATION_SYSTEM.md).

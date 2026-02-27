@@ -1617,6 +1617,55 @@ def on_ro_pan(data):
             socketio.emit("ro_pan", data, room=spec["sid"])
 
 
+# ── Socket Events — Player Comms ─────────────────────────────────────────
+
+@socketio.on("player_comms")
+def on_player_comms(data):
+    """Human player sends a quick-action comms message to bot teammates."""
+    game_id = (data.get("game_id") or "").upper()
+    name = data.get("name", "")
+    msg_type = data.get("msg_type", "")
+    payload = data.get("payload", {})
+
+    g = games.get(game_id)
+    if not g or g["game"] is None:
+        return emit("error", {"msg": "Game not found"})
+
+    p = _get_player(game_id, name)
+    if not p:
+        return emit("error", {"msg": "Player not found"})
+
+    comms = _get_team_comms(game_id, p["team"])
+    if not comms:
+        return emit("error", {"msg": "Comms not available"})
+
+    comms.post_from_human(p["role"], msg_type, payload)
+
+    # Echo the message to the team's comms log
+    readable = _human_comms_readable(msg_type, payload)
+    _emit_bot_chat_team_only(game_id, p["team"], {
+        "team": p["team"], "role": p["role"], "name": name,
+        "msg": readable,
+    })
+
+
+def _human_comms_readable(msg_type, payload):
+    """Convert a player_comms msg_type into a readable log message."""
+    if msg_type == "request_position_report":
+        return "Requesting position report"
+    elif msg_type == "set_charge_priority":
+        return f"Priority: {payload.get('system', '?')}"
+    elif msg_type == "set_system_protect":
+        return f"Protect: {payload.get('system', '?')}"
+    elif msg_type == "report_positions":
+        return "Reporting positions"
+    elif msg_type == "status_report":
+        return "Systems status report"
+    elif msg_type == "recommend_directions":
+        return "Direction recommendation"
+    return msg_type
+
+
 # ── Auto-advance helper ───────────────────────────────────────────────────────
 
 def _check_turn_auto_advance(game_id, game):

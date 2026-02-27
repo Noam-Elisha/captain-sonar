@@ -777,6 +777,31 @@ function renderSurfaceBonusBar() {
   }
 }
 
+// ── Comms quick actions ──────────────────────────────────────
+function sendComms(msgType, payload) {
+  socket.emit('player_comms', {
+    game_id: GAME_ID, name: MY_NAME,
+    msg_type: msgType, payload: payload || {}
+  });
+}
+
+const SYSTEMS = ['torpedo', 'mine', 'sonar', 'drone', 'stealth'];
+let priorityIdx = 0, protectIdx = 0;
+
+function cyclePriority() {
+  priorityIdx = (priorityIdx + 1) % SYSTEMS.length;
+  const sys = SYSTEMS[priorityIdx];
+  document.getElementById('btn-priority').textContent = 'Priority: ' + sys.charAt(0).toUpperCase() + sys.slice(1);
+  sendComms('set_charge_priority', { system: sys });
+}
+
+function cycleProtect() {
+  protectIdx = (protectIdx + 1) % SYSTEMS.length;
+  const sys = SYSTEMS[protectIdx];
+  document.getElementById('btn-protect').textContent = 'Protect: ' + sys.charAt(0).toUpperCase() + sys.slice(1);
+  sendComms('set_system_protect', { system: sys });
+}
+
 // ── Init ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   renderMap();

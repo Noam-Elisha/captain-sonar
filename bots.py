@@ -130,6 +130,9 @@ class RadioOperatorBot:
             elif t == "captain_position_request":
                 pass  # Will send report after processing all messages
 
+            if msg.get("human") and msg["type"] == "request_position_report":
+                self._pending_report = True
+
     # ── Report generation ────────────────────────────────────────────────────
 
     def generate_report(self, comms) -> str:
@@ -748,6 +751,9 @@ class FirstMateBot:
                 if new_priority and isinstance(new_priority, list):
                     self.charge_priority = new_priority
 
+            if msg.get("human") and msg["type"] == "set_charge_priority":
+                self.charge_priority = msg.get("system")
+
     # ── Outgoing communications ──────────────────────────────────────────────
 
     def send_communications(self, comms, systems: dict):
@@ -818,6 +824,11 @@ class EngineerBot:
                 new_protect = msg.get("systems")
                 if new_protect and isinstance(new_protect, list):
                     self.protect_systems = new_protect
+
+            if msg.get("human") and msg["type"] == "set_system_protect":
+                system = msg.get("system")
+                if system:
+                    self.protect_systems = [system]
 
     # ── Outgoing communications ──────────────────────────────────────────────
 

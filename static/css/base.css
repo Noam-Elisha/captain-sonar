@@ -301,3 +301,27 @@ h1, h2, h3 { line-height: 1.2; }
 }
 .sector-grid button:hover,
 .sector-grid button.active { background: var(--accent); border-color: var(--accent); color: #111; }
+
+/* ── Comms quick-action buttons ── */
+.comms-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  padding: .4rem .75rem;
+}
+.comms-btn {
+  padding: .3rem .6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255,255,255,.04);
+  color: var(--text-muted);
+  font-size: .72rem;
+  cursor: pointer;
+  transition: all .15s;
+  letter-spacing: .03em;
+}
+.comms-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(200,168,50,.1);
+}

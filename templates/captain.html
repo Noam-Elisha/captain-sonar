@@ -164,6 +164,13 @@
       <div class="role-wait-status" id="role-wait-status"></div>
     </div>
 
+    <!-- Comms quick actions -->
+    <div class="comms-buttons" id="comms-buttons">
+      <button class="comms-btn" onclick="sendComms('request_position_report')">Request Position</button>
+      <button class="comms-btn" id="btn-priority" onclick="cyclePriority()">Priority: Torpedo</button>
+      <button class="comms-btn" id="btn-protect" onclick="cycleProtect()">Protect: Torpedo</button>
+    </div>
+
     <!-- Event log -->
     <div class="panel-section flex-grow">
       <div class="section-label">COMMS LOG</div>

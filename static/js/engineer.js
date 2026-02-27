@@ -316,6 +316,14 @@ function showToast(msg, isError) {
   setTimeout(() => t.classList.add('hidden'), 4000);
 }
 
+// ── Comms quick actions ──────────────────────────────────────
+function sendComms(msgType, payload) {
+  socket.emit('player_comms', {
+    game_id: GAME_ID, name: MY_NAME,
+    msg_type: msgType, payload: payload || {}
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderHealth();
   renderBoard();
