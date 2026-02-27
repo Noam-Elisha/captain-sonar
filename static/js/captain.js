@@ -227,8 +227,9 @@ socket.on('systems_update', data => {
 socket.on('error', data => { showToast(data.msg, true); });
 
 socket.on('bot_chat', data => {
-  const icons = {captain:'🤖🌟', first_mate:'🤖⚔', engineer:'🤖⚡', radio_operator:'🤖📡'};
-  logEvent(`${icons[data.role]||'🤖'} [${data.name}]: ${data.msg}`, 'bot');
+  const ROLE_TAG = {captain:'CAP', first_mate:'FM', engineer:'ENG', radio_operator:'RO'};
+  const tag = ROLE_TAG[data.role] || 'BOT';
+  logEvent(`[${tag}] ${data.msg}`, 'bot');
 });
 
 // ── Update from full game state ──────────────────────────────

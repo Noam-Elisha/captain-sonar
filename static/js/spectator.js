@@ -134,8 +134,10 @@ socket.on('sub_placed', data => {
 });
 
 socket.on('bot_chat', data => {
+  const ROLE_TAG = {captain:'CAP', first_mate:'FM', engineer:'ENG', radio_operator:'RO'};
+  const tag = ROLE_TAG[data.role] || 'BOT';
   const teamCls = data.team === 'blue' ? 'bot-blue' : data.team === 'red' ? 'bot-red' : 'bot';
-  logEvent(`🤖 [${data.name}]: ${data.msg}`, teamCls);
+  logEvent(`[${tag}] ${data.msg}`, teamCls);
 });
 
 socket.on('error', data => { logEvent(`⚠ ${data.msg}`, 'danger'); });

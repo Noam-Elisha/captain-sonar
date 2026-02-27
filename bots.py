@@ -256,6 +256,13 @@ class RadioOperatorBot:
             return get_sector(row, col, self.sector_size, self.cols) == value
         return False
 
+    def _estimate_sectors(self) -> set:
+        """Return the set of sectors that contain possible enemy positions."""
+        sectors = set()
+        for r, c in self.possible_positions:
+            sectors.add(get_sector(r, c, self.sector_size, self.cols))
+        return sectors
+
     def _compute_position_report(self) -> dict:
         """Compute a structured position report."""
         count = len(self.possible_positions)
@@ -286,15 +293,14 @@ class RadioOperatorBot:
                        key=lambda p: (p[0] - avg_r)**2 + (p[1] - avg_c)**2)
 
         # Summary
-        if certainty == "exact":
-            pos = list(self.possible_positions)[0]
-            summary = f"Enemy located at ({pos[0]+1},{pos[1]+1})"
-        elif certainty == "high":
-            summary = f"Enemy narrowed to {count} positions near ({best[0]+1},{best[1]+1})"
-        elif certainty == "medium":
-            summary = f"~{count} possible positions, estimate ({best[0]+1},{best[1]+1})"
+        sectors = self._estimate_sectors()
+        sector_count = len(sectors)
+        if count <= 5:
+            summary = f"Enemy pinpointed to ~{count} cells in sector(s) {','.join(str(s) for s in sorted(sectors))}"
+        elif count <= 30:
+            summary = f"~{count} positions, likely sector(s) {','.join(str(s) for s in sorted(sectors))}"
         else:
-            summary = f"Enemy in {count} possible positions — need more intel"
+            summary = f"Tracking {count} positions across {sector_count} sector(s)"
 
         # Sample positions for captain (limit message size)
         sample = list(self.possible_positions)
@@ -810,13 +816,7 @@ class FirstMateBot:
 
     @staticmethod
     def describe_charge(system: str) -> str:
-        return {
-            "torpedo": "charging torpedoes 🚀",
-            "mine":    "charging mine launcher 💠",
-            "sonar":   "charging sonar 📡",
-            "drone":   "charging drone 🛸",
-            "stealth": "charging stealth ✨",
-        }.get(system, f"charging {system}")
+        return f"Charged {system}"
 
 
 # ── Engineer Bot ───────────────────────────────────────────────────────────────
@@ -971,8 +971,4 @@ class EngineerBot:
 
     @staticmethod
     def describe_mark(direction: str, index: int) -> str:
-        node = ENGINEERING_LAYOUT[direction][index]
-        color = node["color"]
-        cid   = node.get("circuit")
-        tag   = f"/C{cid}" if cid else ""
-        return f"marking {direction.upper()} node {index} [{color}{tag}]"
+        return f"Marked {direction} node {index}"

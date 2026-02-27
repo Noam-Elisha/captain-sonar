@@ -277,9 +277,6 @@ def _dispatch_events(game_id, game, events):
         elif t == "turn_start":
             socketio.emit("turn_start", {"team": ev["team"]}, room=game_id)
             _broadcast_game_state(game_id)
-            # Radio operator bot for the new team generates commentary on enemy
-            _emit_ro_bot_commentary(game_id, ev["team"])
-
         elif t == "game_over":
             games[game_id]["game"]["phase"] = "ended"
             socketio.emit("game_over",
@@ -450,7 +447,7 @@ def _process_bot_comms_pre_turn(game_id: str, team: str):
         summary = ro["bot"].generate_report(comms)
         _emit_bot_chat_team_only(game_id, team, {
             "team": team, "role": "radio_operator", "name": ro["name"],
-            "msg": f"📡 {summary}",
+            "msg": f"{summary}",
         })
 
     # 2. FM reports current system status to captain
@@ -496,20 +493,6 @@ def _process_bot_comms_post_move(game_id: str, team: str):
     if eng and eng.get("bot"):
         msgs = comms.read_inbox("engineer")
         eng["bot"].process_inbox(msgs)
-
-
-def _emit_ro_bot_commentary(game_id: str, current_team: str):
-    """Emit radio-operator bot commentary for the team whose turn just started.
-    Uses the new position-tracking system."""
-    ro = _get_bot_for_role(game_id, current_team, "radio_operator")
-    if ro and ro.get("bot") and ro["bot"].initialized:
-        msg = ro["bot"].generate_commentary()
-        _emit_bot_chat_team_only(game_id, current_team, {
-            "team":  current_team,
-            "role":  "radio_operator",
-            "name":  ro["name"],
-            "msg":   f"📡 {msg}",
-        })
 
 
 # ── Bot execution loop ─────────────────────────────────────────────────────────
@@ -569,7 +552,7 @@ def _bot_placement_step(game_id: str, g: dict, game: dict) -> bool:
             socketio.emit("sub_placed", {"team": team}, room=game_id)
             _emit_bot_chat_team_only(game_id, team, {
                 "team": team, "role": "captain", "name": cap["name"],
-                "msg": "Submarine deployed 🗺",
+                "msg": "Submarine deployed",
             })
             if game["phase"] == "playing":
                 current = gs.current_team(game)
@@ -595,10 +578,6 @@ def _bot_playing_step(game_id: str, g: dict, game: dict) -> bool:
             ok, msg = gs.captain_dive(game, team)
             if ok:
                 socketio.emit("dive_announced", {"team": team}, room=game_id)
-                socketio.emit("bot_chat", {
-                    "team": team, "role": "captain", "name": cap["name"],
-                    "msg": "Diving 🛡",
-                }, room=game_id)
                 _broadcast_game_state(game_id)
                 return True
 
@@ -680,10 +659,6 @@ def _bot_captain_action(game_id, g, game, team, cap_player) -> bool:
         if ok:
             _dispatch_events(game_id, game, events)
             _broadcast_game_state(game_id)
-            socketio.emit("bot_chat", {
-                "team": team, "role": "captain", "name": name,
-                "msg": f"Moving {direction} ↗",
-            }, room=game_id)
             return True
         # Move failed (trail?) → surface
         ok2, msg2, events2 = gs.captain_surface(game, team)
@@ -706,10 +681,6 @@ def _bot_captain_action(game_id, g, game, team, cap_player) -> bool:
             if ok:
                 _dispatch_events(game_id, game, events)
                 _broadcast_game_state(game_id)
-                socketio.emit("bot_chat", {
-                    "team": team, "role": "captain", "name": name,
-                    "msg": f"✨ Silent Running: {steps} silent step(s)",
-                }, room=game_id)
                 return True
         # Stealth failed or no moves — surface
         ok, msg, events = gs.captain_surface(game, team)
@@ -725,10 +696,6 @@ def _do_surface(game_id, game, team, bot_name, surface_events):
     RULEBOOK: enemy gets 3 bonus turns after surfacing — bot must wait."""
     _dispatch_events(game_id, game, surface_events)
     _broadcast_game_state(game_id)
-    socketio.emit("bot_chat", {
-        "team": team, "role": "captain", "name": bot_name,
-        "msg": "Surfacing to clear trail ✨",
-    }, room=game_id)
 
 
 # Keep alias for any remaining references
@@ -754,10 +721,6 @@ def _bot_captain_weapon_action(game_id, g, game, team, cap_player) -> bool:
         if ok:
             _dispatch_events(game_id, game, events)
             _broadcast_game_state(game_id)
-            socketio.emit("bot_chat", {
-                "team": team, "role": "captain", "name": name,
-                "msg": f"🚀 Firing torpedo at ({tr+1},{tc+1})!",
-            }, room=game_id)
             return True
 
     elif atype == "drone":
@@ -767,10 +730,6 @@ def _bot_captain_weapon_action(game_id, g, game, team, cap_player) -> bool:
             _dispatch_events(game_id, game, events)
             in_sec = any(ev.get("in_sector") for ev in events if ev.get("type") == "drone_result")
             _broadcast_game_state(game_id)
-            socketio.emit("bot_chat", {
-                "team": team, "role": "captain", "name": name,
-                "msg": f"🛸 Drone sector {sector}: {'CONTACT!' if in_sec else 'clear'}",
-            }, room=game_id)
             return True
 
     elif atype == "sonar":
@@ -778,10 +737,6 @@ def _bot_captain_weapon_action(game_id, g, game, team, cap_player) -> bool:
         if ok:
             _dispatch_events(game_id, game, events)
             _broadcast_game_state(game_id)
-            socketio.emit("bot_chat", {
-                "team": team, "role": "captain", "name": name,
-                "msg": "📡 Sonar activated — awaiting enemy response",
-            }, room=game_id)
             return True
 
     return False
@@ -817,7 +772,7 @@ def _bot_engineer_action(game_id, g, game, team, eng_player) -> bool:
         desc = bot.describe_mark(direction, index)
         _emit_bot_chat_team_only(game_id, team, {
             "team": team, "role": "engineer", "name": eng_player["name"],
-            "msg": f"🔧 {desc}",
+            "msg": f"{desc}",
         })
         return True
     return False
@@ -842,7 +797,7 @@ def _bot_fm_action(game_id, g, game, team, fm_player) -> bool:
         _broadcast_game_state(game_id)
         _emit_bot_chat_team_only(game_id, team, {
             "team": team, "role": "first_mate", "name": fm_player["name"],
-            "msg": f"⚙️ {bot.describe_charge(system)}",
+            "msg": f"{bot.describe_charge(system)}",
         })
         return True
     # Charge failed (already full?); mark done
@@ -868,10 +823,6 @@ def _bot_sonar_respond(game_id, game, responding_team, cap_player) -> bool:
     if ok:
         _dispatch_events(game_id, game, events)
         _broadcast_game_state(game_id)
-        socketio.emit("bot_chat", {
-            "team": responding_team, "role": "captain", "name": cap_player["name"],
-            "msg": f"📡 Sonar response: {type1}={val1}, {type2}={val2}",
-        }, room=game_id)
         _schedule_bots(game_id)
         return True
     # If validation failed, try a different response (shouldn't happen normally)
