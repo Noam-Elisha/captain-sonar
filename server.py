@@ -447,7 +447,7 @@ def _process_bot_comms_pre_turn(game_id: str, team: str):
         summary = ro["bot"].generate_report(comms)
         _emit_bot_chat_team_only(game_id, team, {
             "team": team, "role": "radio_operator", "name": ro["name"],
-            "msg": f"{summary}",
+            "msg": summary,
         })
 
     # 2. FM reports current system status to captain
@@ -728,7 +728,6 @@ def _bot_captain_weapon_action(game_id, g, game, team, cap_player) -> bool:
         ok, msg, events = gs.captain_use_drone(game, team, sector)
         if ok:
             _dispatch_events(game_id, game, events)
-            in_sec = any(ev.get("in_sector") for ev in events if ev.get("type") == "drone_result")
             _broadcast_game_state(game_id)
             return True
 
@@ -772,7 +771,7 @@ def _bot_engineer_action(game_id, g, game, team, eng_player) -> bool:
         desc = bot.describe_mark(direction, index)
         _emit_bot_chat_team_only(game_id, team, {
             "team": team, "role": "engineer", "name": eng_player["name"],
-            "msg": f"{desc}",
+            "msg": desc,
         })
         return True
     return False
@@ -797,7 +796,7 @@ def _bot_fm_action(game_id, g, game, team, fm_player) -> bool:
         _broadcast_game_state(game_id)
         _emit_bot_chat_team_only(game_id, team, {
             "team": team, "role": "first_mate", "name": fm_player["name"],
-            "msg": f"{bot.describe_charge(system)}",
+            "msg": bot.describe_charge(system),
         })
         return True
     # Charge failed (already full?); mark done

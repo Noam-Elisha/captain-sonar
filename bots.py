@@ -147,37 +147,6 @@ class RadioOperatorBot:
         )
         return report["summary"]
 
-    def generate_commentary(self) -> str:
-        """Generate a concise analysis message (for bot_chat display)."""
-        if not self.initialized:
-            return "No enemy contact yet — scanning all sectors 👁"
-
-        report = self._compute_position_report()
-        count = report["count"]
-        certainty = report["certainty"]
-
-        parts = []
-
-        if certainty == "exact":
-            pos = report["best_guess"]
-            parts.append(f"LOCATED at ({pos[0]+1},{pos[1]+1})")
-        elif certainty == "high":
-            pos = report["best_guess"]
-            parts.append(f"narrowed to {count} positions near ({pos[0]+1},{pos[1]+1})")
-        elif certainty == "medium":
-            pos = report["best_guess"]
-            parts.append(f"~{count} possibilities, estimate ({pos[0]+1},{pos[1]+1})")
-        else:
-            parts.append(f"{count} possible positions — need more intel")
-
-        if self.move_log:
-            recent = self.move_log[-6:]
-            cnt = Counter(recent)
-            dominant, freq = cnt.most_common(1)[0]
-            parts.append(f"trending {dominant} ({freq}/{len(recent)} recent)")
-
-        return "Enemy: " + ", ".join(parts)
-
     # ── Position tracking internals ──────────────────────────────────────────
 
     def _process_enemy_move(self, direction: str):
