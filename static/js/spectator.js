@@ -12,7 +12,6 @@ const ISLAND_SET = new Set(ISLANDS.map(([r, c]) => `${r},${c}`));
 const SYSTEM_MAX    = { torpedo: 3, mine: 3, sonar: 3, drone: 4, stealth: 5 };
 const SYSTEM_LABELS = { torpedo: '🚀 Torpedo', mine: '💠 Mine', sonar: '📡 Sonar', drone: '🛸 Drone', stealth: '✨ Silent Running' };
 const SYSTEM_COLOR  = { torpedo: 'col-red', mine: 'col-red', sonar: 'col-green', drone: 'col-green', stealth: 'col-yellow' };
-const ENG_DIR_ORDER = ['west', 'north', 'south', 'east'];
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let lastBlue = null, lastRed = null;
@@ -263,81 +262,72 @@ function renderEngBoard(id, board) {
   const el = document.getElementById(id);
   if (!el || !board) return;
   el.innerHTML = '';
-  el.style.position = 'relative'; // needed for SVG overlay
 
-  const wrap = document.createElement('div');
-  wrap.className = 'mini-eng';
+  const DIR_ORDER_2X2 = [
+    ['west', 'north'],
+    ['south', 'east']
+  ];
+  const DIR_LABELS = { west: 'W', north: 'N', south: 'S', east: 'E' };
+  const CIRCUIT_LABELS = ['C1', 'C2', 'C3'];
+  const CIRCUIT_CLASSES = ['c1', 'c2', 'c3'];
 
-  // Track the 3 circuit node elements per direction for SVG line drawing
-  const circNodeEls = {};  // dir -> [el0, el1, el2]
+  const grid = document.createElement('div');
+  grid.className = 'mini-eng-2x2';
 
-  ENG_DIR_ORDER.forEach(dir => {
+  DIR_ORDER_2X2.flat().forEach(dir => {
     const nodes = board[dir];
     if (!nodes) return;
-    circNodeEls[dir] = [];
-    const col = document.createElement('div');
-    col.className = 'mini-col';
+
+    const section = document.createElement('div');
+    section.className = 'mini-eng-section';
+
+    // Direction label
     const lbl = document.createElement('div');
-    lbl.className   = 'mini-col-lbl';
-    lbl.textContent = dir[0].toUpperCase();
-    col.appendChild(lbl);
-    nodes.forEach((node, ni) => {
-      if (ni === 3) {
-        const div = document.createElement('div');
-        div.className = 'mini-reactor-div';
-        col.appendChild(div);
-      }
+    lbl.className = 'mini-dir-label';
+    lbl.textContent = DIR_LABELS[dir];
+    section.appendChild(lbl);
+
+    // Circuit nodes (0-2)
+    const mainRow = document.createElement('div');
+    mainRow.className = 'mini-node-row';
+    for (let i = 0; i < 3; i++) {
+      const node = nodes[i];
       const dot = document.createElement('div');
-      dot.className = 'mini-node ' + node.color
-        + (node.marked   ? ' marked'             : '')
-        + (node.circuit  ? ` mini-circ-${node.circuit}` : '');
-      col.appendChild(dot);
-      if (ni < 3) circNodeEls[dir].push(dot);  // indices 0-2 are circuit nodes
-    });
-    wrap.appendChild(col);
+      dot.className = 'mini-node-2x2 ' + node.color + (node.marked ? ' marked' : '');
+      const badge = document.createElement('span');
+      badge.className = 'mini-circuit-badge ' + CIRCUIT_CLASSES[i];
+      badge.textContent = CIRCUIT_LABELS[i];
+      dot.appendChild(badge);
+      mainRow.appendChild(dot);
+    }
+    section.appendChild(mainRow);
+
+    // Divider
+    const divider = document.createElement('div');
+    divider.className = 'mini-divider';
+    section.appendChild(divider);
+
+    // Extra nodes (3-5)
+    const extraRow = document.createElement('div');
+    extraRow.className = 'mini-node-row';
+    for (let i = 3; i < 6; i++) {
+      const node = nodes[i];
+      const dot = document.createElement('div');
+      dot.className = 'mini-node-2x2 ' + node.color + (node.marked ? ' marked' : '');
+      if (node.color === 'radiation') {
+        const sym = document.createElement('span');
+        sym.className = 'mini-rad-sym';
+        sym.textContent = '\u2622';
+        dot.appendChild(sym);
+      }
+      extraRow.appendChild(dot);
+    }
+    section.appendChild(extraRow);
+
+    grid.appendChild(section);
   });
 
-  el.appendChild(wrap);
-
-  // Draw horizontal circuit traces after layout (requestAnimationFrame waits for paint)
-  const MINI_CC = { 1: '#f97316', 2: '#06b6d4', 3: '#ec4899' };
-  requestAnimationFrame(() => {
-    el.querySelectorAll('.mini-circ-svg').forEach(s => s.remove());
-    const elRect = el.getBoundingClientRect();
-    if (!elRect.width) return;
-
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.className = 'mini-circ-svg';
-    svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:2;overflow:visible;';
-    svg.setAttribute('width',  elRect.width);
-    svg.setAttribute('height', elRect.height);
-
-    [1, 2, 3].forEach(cid => {
-      const ci = cid - 1;  // node index 0-2
-      const pts = ENG_DIR_ORDER.map(dir => {
-        const nodeEl = circNodeEls[dir]?.[ci];
-        if (!nodeEl) return null;
-        const r = nodeEl.getBoundingClientRect();
-        return {
-          x: +(r.left - elRect.left + r.width  / 2).toFixed(1),
-          y: +(r.top  - elRect.top  + r.height / 2).toFixed(1),
-        };
-      }).filter(Boolean);
-      if (pts.length < 2) return;
-
-      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-      poly.setAttribute('points',         pts.map(p => `${p.x},${p.y}`).join(' '));
-      poly.setAttribute('stroke',         MINI_CC[cid]);
-      poly.setAttribute('stroke-width',   '2.5');
-      poly.setAttribute('stroke-opacity', '0.75');
-      poly.setAttribute('fill',           'none');
-      poly.setAttribute('stroke-linecap', 'round');
-      poly.setAttribute('stroke-linejoin','round');
-      svg.appendChild(poly);
-    });
-
-    el.appendChild(svg);
-  });
+  el.appendChild(grid);
 }
 
 // ── Move log ──────────────────────────────────────────────────────────────────

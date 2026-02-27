@@ -167,55 +167,73 @@
   font-weight: 700;
 }
 
-/* ── Mini engineering board ───────────────────────────────────── */
-.mini-eng {
-  display: flex;
-  gap: 0;
-  flex-wrap: nowrap;
-  justify-content: space-between;
-  position: relative;   /* SVG overlay positions within here */
+/* -- Mini engineering board (2x2 matching engineer view) ---- */
+.mini-eng-2x2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  position: relative;
 }
-.mini-col {
+.mini-eng-section {
+  background: rgba(30, 30, 35, 0.45);
+  border: 1px solid rgba(100, 100, 110, 0.25);
+  border-radius: 6px;
+  padding: 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  position: relative;
-  z-index: 1;           /* nodes sit above the SVG trace lines */
+  gap: 3px;
 }
-.mini-col-lbl {
-  font-size: .6rem;
+.mini-dir-label {
+  font-size: .52rem;
+  font-weight: 700;
+  letter-spacing: .06em;
   color: var(--text-muted);
-  letter-spacing: .03em;
+  text-transform: uppercase;
   line-height: 1;
-  margin-bottom: 2px;
 }
-.mini-node {
-  width: 15px;
-  height: 15px;
+.mini-node-row {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+}
+.mini-node-2x2 {
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,.15);
-  transition: background .2s, border-color .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .32rem;
+  font-weight: 700;
   flex-shrink: 0;
-  position: relative;
-  z-index: 1;
+  transition: background .2s, border-color .2s;
 }
-.mini-node.red        { background: rgba(239,68,68,.18);  border-color: rgba(239,68,68,.40); }
-.mini-node.green      { background: rgba(34,197,94,.18);  border-color: rgba(34,197,94,.40); }
-.mini-node.yellow     { background: rgba(234,179,8,.18);  border-color: rgba(234,179,8,.40); }
-.mini-node.radiation  { background: rgba(168,85,247,.18); border-color: rgba(168,85,247,.40); }
-.mini-node.red.marked        { background: var(--col-red);    border-color: var(--col-red);    box-shadow: 0 0 4px var(--col-red); }
-.mini-node.green.marked      { background: var(--col-green);  border-color: var(--col-green);  box-shadow: 0 0 4px var(--col-green); }
-.mini-node.yellow.marked     { background: var(--col-yellow); border-color: var(--col-yellow); box-shadow: 0 0 4px var(--col-yellow); }
-.mini-node.radiation.marked  { background: var(--col-radiation); border-color: var(--col-radiation); box-shadow: 0 0 4px var(--col-radiation); }
-/* Circuit ring — matches the three circuit trace colours */
-.mini-node.mini-circ-1 { outline: 1.5px solid rgba(249,115,22,.70); outline-offset: 1px; }
-.mini-node.mini-circ-2 { outline: 1.5px solid rgba(6,182,212,.70);  outline-offset: 1px; }
-.mini-node.mini-circ-3 { outline: 1.5px solid rgba(236,72,153,.70); outline-offset: 1px; }
-.mini-reactor-div {
-  width: 100%;
-  border-top: 1px dashed rgba(255,255,255,.12);
-  margin: 2px 0;
+.mini-node-2x2.red        { background: rgba(239,68,68,.18);  border-color: rgba(239,68,68,.40); }
+.mini-node-2x2.green      { background: rgba(34,197,94,.18);  border-color: rgba(34,197,94,.40); }
+.mini-node-2x2.yellow     { background: rgba(234,179,8,.18);  border-color: rgba(234,179,8,.40); }
+.mini-node-2x2.radiation  { background: rgba(168,85,247,.18); border-color: rgba(168,85,247,.40); }
+.mini-node-2x2.red.marked        { background: var(--col-red);    border-color: var(--col-red);    box-shadow: 0 0 3px var(--col-red); }
+.mini-node-2x2.green.marked      { background: var(--col-green);  border-color: var(--col-green);  box-shadow: 0 0 3px var(--col-green); }
+.mini-node-2x2.yellow.marked     { background: var(--col-yellow); border-color: var(--col-yellow); box-shadow: 0 0 3px var(--col-yellow); }
+.mini-node-2x2.radiation.marked  { background: var(--col-radiation); border-color: var(--col-radiation); box-shadow: 0 0 3px var(--col-radiation); }
+.mini-circuit-badge {
+  font-size: .28rem;
+  font-weight: 900;
+  line-height: 1;
+  opacity: .8;
+}
+.mini-circuit-badge.c1 { color: #f97316; }
+.mini-circuit-badge.c2 { color: #06b6d4; }
+.mini-circuit-badge.c3 { color: #ec4899; }
+.mini-node-2x2.marked .mini-circuit-badge { color: #fff; opacity: .6; }
+.mini-rad-sym { font-size: .5rem; opacity: .85; }
+.mini-node-2x2.marked .mini-rad-sym { color: #fff; }
+.mini-divider {
+  width: 80%;
+  border-top: 1px dashed rgba(255,255,255,.1);
+  margin: 1px 0;
 }
 
 /* ── Move log tags ────────────────────────────────────────────── */
