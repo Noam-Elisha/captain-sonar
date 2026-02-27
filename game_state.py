@@ -376,7 +376,7 @@ def captain_surface(game, team):
 
     sub = game["submarines"][team]
     r, c = sub["position"]
-    sector = get_sector(r, c, game["map"]["sector_size"], game["map"]["cols"])
+    sector = get_sector(r, c, game["map"]["sector_width"], game["map"]["sector_height"], game["map"]["cols"])
 
     # RULEBOOK: surfacing does NOT cost HP
     sub["trail"] = [[r, c]]   # clear trail (keep current position)
@@ -721,7 +721,7 @@ def captain_respond_sonar(game, responding_team, type1, val1, type2, val2):
     enemy_sub = game["submarines"][responding_team]
     er, ec = enemy_sub["position"]
     map_def = game["map"]
-    actual_sector = get_sector(er, ec, map_def["sector_size"], map_def["cols"])
+    actual_sector = get_sector(er, ec, map_def["sector_width"], map_def["sector_height"], map_def["cols"])
 
     def is_true(t, v):
         if t == "row":    return er == v
@@ -771,8 +771,7 @@ def captain_use_drone(game, team, ask_sector):
     enemy_sub = game["submarines"][enemy_team]
     er, ec = enemy_sub["position"]
     map_def = game["map"]
-    sector_size = map_def["sector_size"]
-    actual_sector = get_sector(er, ec, sector_size, map_def["cols"])
+    actual_sector = get_sector(er, ec, map_def["sector_width"], map_def["sector_height"], map_def["cols"])
 
     in_sector = (actual_sector == ask_sector)
 
@@ -944,8 +943,6 @@ def serialize_game(game, perspective_team=None):
     If perspective_team is set, hide the OTHER team's exact position (only sector visible).
     """
     map_def = game["map"]
-    sector_size = map_def["sector_size"]
-
     subs = {}
     for team, sub in game["submarines"].items():
         is_own = (perspective_team == team)
@@ -966,7 +963,7 @@ def serialize_game(game, perspective_team=None):
             # Hide exact position; only reveal sector when surfaced
             if sub["surfaced"] and sub["position"]:
                 r, c = sub["position"]
-                s["sector"] = get_sector(r, c, sector_size, map_def["cols"])
+                s["sector"] = get_sector(r, c, map_def["sector_width"], map_def["sector_height"], map_def["cols"])
             s["position"] = None
             s["trail"]    = None
             s["mines"]    = None

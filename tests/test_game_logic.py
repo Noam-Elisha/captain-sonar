@@ -20,9 +20,25 @@ import game_state as gs
 # Helpers
 # ────────────────────────────────────────────────────────────────────────────
 
+TEST_MAP = {
+    "name": "Test Map",
+    "rows": 15,
+    "cols": 15,
+    "sector_width": 5,
+    "sector_height": 5,
+    "sector_size": 5,
+    "islands": [
+        (2, 1), (3, 1), (1, 7), (6, 2), (7, 2), (7, 3), (7, 6),
+        (0, 12), (1, 12), (5, 11), (5, 12),
+        (8, 7), (11, 1), (12, 1), (10, 7), (11, 7), (11, 8),
+        (12, 11), (13, 12),
+    ],
+}
+
+
 def fresh_game():
-    """Return a fresh game with map alpha."""
-    return gs.make_game("alpha")
+    """Return a fresh game with a deterministic test map."""
+    return gs.make_game(TEST_MAP)
 
 
 def place_both(game, blue_pos=(5, 4), red_pos=(10, 10)):

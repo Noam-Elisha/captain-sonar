@@ -1212,7 +1212,7 @@ def on_map_settings(data):
         "islands": settings.get("islands"),
     }
     g["map_settings"] = validated
-    socketio.emit("map_settings_update", {"settings": settings}, room=game_id)
+    socketio.emit("map_settings_update", {"settings": validated}, room=game_id)
 
 
 @socketio.on("start_game")

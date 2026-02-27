@@ -73,11 +73,12 @@ def generate_islands(rows, cols, num_islands, max_island_size):
     return sorted(island_set)
 
 
-def get_sector(row, col, sector_size=5, map_cols=15):
-    """Return 1-indexed sector number for a given (row, col)."""
-    sectors_per_row = math.ceil(map_cols / sector_size)
-    sr = row // sector_size
-    sc = col // sector_size
+def get_sector(row, col, sector_width=5, sector_height=5, map_cols=15):
+    """Return 1-indexed sector number for a given (row, col).
+    sector_width divides columns, sector_height divides rows."""
+    sectors_per_row = math.ceil(map_cols / sector_width)
+    sr = row // sector_height
+    sc = col // sector_width
     return sr * sectors_per_row + sc + 1
 
 

@@ -78,7 +78,9 @@ class RadioOperatorBot:
         # Map info (set during initialize)
         self.rows = 0
         self.cols = 0
-        self.sector_size = 8
+        self.sector_size = 5
+        self.sector_width = 5
+        self.sector_height = 5
         self.island_set: set = set()
 
         # Position tracking
@@ -92,6 +94,8 @@ class RadioOperatorBot:
         self.rows = map_def["rows"]
         self.cols = map_def["cols"]
         self.sector_size = map_def["sector_size"]
+        self.sector_width = map_def.get("sector_width", self.sector_size)
+        self.sector_height = map_def.get("sector_height", self.sector_size)
         self.island_set = set(tuple(p) for p in map_def["islands"])
 
         # All non-island cells are initially possible
@@ -169,7 +173,7 @@ class RadioOperatorBot:
         for r in range(self.rows):
             for c in range(self.cols):
                 if (r, c) not in self.island_set:
-                    if get_sector(r, c, self.sector_size, self.cols) == sector:
+                    if get_sector(r, c, self.sector_width, self.sector_height, self.cols) == sector:
                         self.possible_positions.add((r, c))
         self.move_count = 0
         self.move_log.clear()
@@ -205,12 +209,12 @@ class RadioOperatorBot:
         if in_sector:
             narrowed = {
                 (r, c) for r, c in self.possible_positions
-                if get_sector(r, c, self.sector_size, self.cols) == sector
+                if get_sector(r, c, self.sector_width, self.sector_height, self.cols) == sector
             }
         else:
             narrowed = {
                 (r, c) for r, c in self.possible_positions
-                if get_sector(r, c, self.sector_size, self.cols) != sector
+                if get_sector(r, c, self.sector_width, self.sector_height, self.cols) != sector
             }
         if narrowed:
             self.possible_positions = narrowed
@@ -222,14 +226,14 @@ class RadioOperatorBot:
         elif info_type == "col":
             return col == value
         elif info_type == "sector":
-            return get_sector(row, col, self.sector_size, self.cols) == value
+            return get_sector(row, col, self.sector_width, self.sector_height, self.cols) == value
         return False
 
     def _estimate_sectors(self) -> set:
         """Return the set of sectors that contain possible enemy positions."""
         sectors = set()
         for r, c in self.possible_positions:
-            sectors.add(get_sector(r, c, self.sector_size, self.cols))
+            sectors.add(get_sector(r, c, self.sector_width, self.sector_height, self.cols))
         return sectors
 
     def _compute_position_report(self) -> dict:
@@ -421,7 +425,7 @@ class CaptainBot:
         Returns (type1, val1, type2, val2).
         """
         er, ec = own_sub["position"]
-        actual_sector = get_sector(er, ec, map_def["sector_size"], map_def["cols"])
+        actual_sector = get_sector(er, ec, map_def["sector_width"], map_def["sector_height"], map_def["cols"])
 
         type_options = ["row", "col", "sector"]
         random.shuffle(type_options)
@@ -593,7 +597,7 @@ class CaptainBot:
         # Use drone if charged and need more intel
         if (charge("drone") >= SYSTEM_MAX_CHARGE["drone"]
                 and self.enemy_certainty in ("none", "low")):
-            sector = self._best_drone_sector()
+            sector = self._best_drone_sector(map_def)
             return ("drone", sector)
 
         # Use sonar if charged and we don't have exact location
@@ -633,16 +637,17 @@ class CaptainBot:
 
     def _sector_torpedo_target(self, r, c, sector, map_def, island_set):
         """Pick closest in-range cell inside the target sector."""
-        sector_size = map_def["sector_size"]
-        spr = math.ceil(map_def["cols"] / sector_size)
+        sw = map_def.get("sector_width", map_def.get("sector_size", 5))
+        sh = map_def.get("sector_height", sw)
+        spr = math.ceil(map_def["cols"] / sw)
         sec_idx = sector - 1
         sr = sec_idx // spr
         sc = sec_idx % spr
-        min_r, min_c = sr * sector_size, sc * sector_size
+        min_r, min_c = sr * sh, sc * sw
 
         candidates = []
-        for dr in range(sector_size):
-            for dc in range(sector_size):
+        for dr in range(sh):
+            for dc in range(sw):
                 tr, tc = min_r + dr, min_c + dc
                 dist = abs(tr - r) + abs(tc - c)
                 if 0 < dist <= 4 and (tr, tc) not in island_set:
@@ -652,20 +657,22 @@ class CaptainBot:
         candidates.sort()
         return (candidates[0][1], candidates[0][2])
 
-    def _best_drone_sector(self):
+    def _best_drone_sector(self, map_def):
         """Choose the most useful sector to scan with drone."""
+        sw = map_def.get("sector_width", map_def.get("sector_size", 5))
+        sh = map_def.get("sector_height", sw)
+        cols = map_def["cols"]
+        rows = map_def["rows"]
+        total_sectors = math.ceil(rows / sh) * math.ceil(cols / sw)
+
         # If we have possible positions, find sector with most candidates
         if self.enemy_possible_positions:
             sector_counts: dict[int, int] = {}
             for pos in self.enemy_possible_positions:
                 r, c = pos if isinstance(pos, (list, tuple)) else (pos[0], pos[1])
-                # We need sector info — approximate with basic calc
-                # (RO has the map, captain doesn't know sector_size directly,
-                #  but for simplicity we use 8 which is the standard)
-                s = get_sector(r, c, 8, 15)
+                s = get_sector(r, c, sw, sh, cols)
                 sector_counts[s] = sector_counts.get(s, 0) + 1
             if sector_counts:
-                # Scan the sector with most possible positions
                 return max(sector_counts, key=sector_counts.get)
 
         # Exclude sectors already confirmed empty by drone
@@ -674,9 +681,9 @@ class CaptainBot:
             if not in_sector:
                 confirmed_not.add(sector)
 
-        options = [s for s in range(1, 5) if s not in confirmed_not]
+        options = [s for s in range(1, total_sectors + 1) if s not in confirmed_not]
         if not options:
-            options = list(range(1, 5))
+            options = list(range(1, total_sectors + 1))
         return random.choice(options)
 
     def _plan_stealth(self, r, c, trail_set, island_set, rows, cols, max_steps=4, mine_set=None):
