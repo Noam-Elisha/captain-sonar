@@ -130,9 +130,6 @@ class RadioOperatorBot:
             elif t == "captain_position_request":
                 pass  # Will send report after processing all messages
 
-            if msg.get("human") and msg["type"] == "request_position_report":
-                self._pending_report = True
-
     # ── Report generation ────────────────────────────────────────────────────
 
     def generate_report(self, comms) -> str:

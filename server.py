@@ -1622,6 +1622,14 @@ def on_ro_pan(data):
 @socketio.on("player_comms")
 def on_player_comms(data):
     """Human player sends a quick-action comms message to bot teammates."""
+    VALID_COMMS = {
+        "captain": {"request_position_report", "set_charge_priority", "set_system_protect"},
+        "radio_operator": {"report_positions"},
+        "first_mate": {"status_report"},
+        "engineer": {"recommend_directions"},
+    }
+    VALID_SYSTEMS = {"torpedo", "mine", "sonar", "drone", "stealth"}
+
     game_id = (data.get("game_id") or "").upper()
     name = data.get("name", "")
     msg_type = data.get("msg_type", "")
@@ -1634,6 +1642,14 @@ def on_player_comms(data):
     p = _get_player(game_id, name)
     if not p:
         return emit("error", {"msg": "Player not found"})
+
+    allowed = VALID_COMMS.get(p["role"], set())
+    if msg_type not in allowed:
+        return emit("error", {"msg": "Not authorized for this message type"})
+
+    if msg_type in ("set_charge_priority", "set_system_protect"):
+        if payload.get("system") not in VALID_SYSTEMS:
+            return emit("error", {"msg": "Invalid system name"})
 
     comms = _get_team_comms(game_id, p["team"])
     if not comms:
