@@ -312,8 +312,10 @@ function renderDroneMap() {
   canvas.style.margin = '0 auto .5rem';
 
   const ctx = canvas.getContext('2d');
-  const spr = Math.ceil(MAP_COLS / SECTOR_SZ);  // sectors per row
-  const spc = Math.ceil(MAP_ROWS / SECTOR_SZ);  // sectors per col
+  const _secW = (typeof SECTOR_W !== 'undefined') ? SECTOR_W : SECTOR_SZ;
+  const _secH = (typeof SECTOR_H !== 'undefined') ? SECTOR_H : SECTOR_SZ;
+  const spr = Math.ceil(MAP_COLS / _secW);  // sectors per row
+  const spc = Math.ceil(MAP_ROWS / _secH);  // sectors per col
   const islandSet = (typeof ISLANDS !== 'undefined')
     ? new Set(ISLANDS.map(([r, c]) => `${r},${c}`))
     : new Set();
@@ -336,10 +338,10 @@ function renderDroneMap() {
   for (let sr = 0; sr < spc; sr++) {
     for (let sc = 0; sc < spr; sc++) {
       const secNum = sr * spr + sc + 1;
-      const x = sc * SECTOR_SZ * MINI_PX;
-      const y = sr * SECTOR_SZ * MINI_PX;
-      const w = Math.min(SECTOR_SZ, MAP_COLS - sc * SECTOR_SZ) * MINI_PX;
-      const h = Math.min(SECTOR_SZ, MAP_ROWS - sr * SECTOR_SZ) * MINI_PX;
+      const x = sc * _secW * MINI_PX;
+      const y = sr * _secH * MINI_PX;
+      const w = Math.min(_secW, MAP_COLS - sc * _secW) * MINI_PX;
+      const h = Math.min(_secH, MAP_ROWS - sr * _secH) * MINI_PX;
 
       // Sector tint
       ctx.fillStyle = PALETTE[(secNum - 1) % PALETTE.length];
@@ -368,8 +370,8 @@ function renderDroneMap() {
     const col = Math.floor((e.clientX - rect.left) * scaleX / MINI_PX);
     const row = Math.floor((e.clientY - rect.top)  * scaleY / MINI_PX);
     if (col < 0 || col >= MAP_COLS || row < 0 || row >= MAP_ROWS) return;
-    const secR   = Math.floor(row / SECTOR_SZ);
-    const secC   = Math.floor(col / SECTOR_SZ);
+    const secR   = Math.floor(row / _secH);
+    const secC   = Math.floor(col / _secW);
     const secNum = secR * spr + secC + 1;
     submitDrone(secNum);
   };

@@ -323,15 +323,17 @@ function renderMap() {
 
 function renderSectors() {
   const grid    = document.getElementById('map-grid');
-  const sPerRow = Math.ceil(MAP_ROWS / SECTOR_SZ);
-  const sPerCol = Math.ceil(MAP_COLS / SECTOR_SZ);
+  const secW = (typeof SECTOR_W !== 'undefined') ? SECTOR_W : SECTOR_SZ;
+  const secH = (typeof SECTOR_H !== 'undefined') ? SECTOR_H : SECTOR_SZ;
+  const sPerRow = Math.ceil(MAP_ROWS / secH);
+  const sPerCol = Math.ceil(MAP_COLS / secW);
   for (let sr = 0; sr < sPerRow; sr++) {
     for (let sc = 0; sc < sPerCol; sc++) {
       const box    = document.createElement('div');
       box.className = 'sector-box';
-      const startR = sr * SECTOR_SZ, startC = sc * SECTOR_SZ;
-      const endR   = Math.min(startR + SECTOR_SZ, MAP_ROWS);
-      const endC   = Math.min(startC + SECTOR_SZ, MAP_COLS);
+      const startR = sr * secH, startC = sc * secW;
+      const endR   = Math.min(startR + secH, MAP_ROWS);
+      const endC   = Math.min(startC + secW, MAP_COLS);
       box.style.position = 'absolute';
       box.style.left     = (MAP_PAD + 24 + startC * CELL_PX) + 'px';
       box.style.top      = (MAP_PAD + 24 + startR * CELL_PX) + 'px';
@@ -663,10 +665,11 @@ function openSonarRespond(activatingTeam) {
   const posEl = document.getElementById('sonar-respond-position');
   if (posEl && myPosition) {
     // Always compute sector from current position (matches Python get_sector() logic)
-    // RULEBOOK: TBT has 4 sectors (2×2). sector = (row//SECTOR_SZ)*sectorsPerRow + (col//SECTOR_SZ) + 1
-    const sectorsPerRow = Math.ceil(MAP_COLS / SECTOR_SZ);
-    const sr = Math.floor(myPosition.row / SECTOR_SZ);
-    const sc = Math.floor(myPosition.col / SECTOR_SZ);
+    const _secW = (typeof SECTOR_W !== 'undefined') ? SECTOR_W : SECTOR_SZ;
+    const _secH = (typeof SECTOR_H !== 'undefined') ? SECTOR_H : SECTOR_SZ;
+    const sectorsPerRow = Math.ceil(MAP_COLS / _secW);
+    const sr = Math.floor(myPosition.row / _secH);
+    const sc = Math.floor(myPosition.col / _secW);
     const secVal = sr * sectorsPerRow + sc + 1;
     posEl.textContent =
       `Your position: Row ${myPosition.row + 1} | Col ${COL_LABELS[myPosition.col]} (${myPosition.col + 1}) | Sector ${secVal} (1–4)`;

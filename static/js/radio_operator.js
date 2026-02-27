@@ -167,15 +167,17 @@ function renderMap() {
 
   // Sectors
   const wrapper = document.querySelector('.map-wrapper');
-  const sPerRow = Math.ceil(MAP_ROWS / SECTOR_SZ);
-  const sPerCol = Math.ceil(MAP_COLS / SECTOR_SZ);
+  const secW = (typeof SECTOR_W !== 'undefined') ? SECTOR_W : SECTOR_SZ;
+  const secH = (typeof SECTOR_H !== 'undefined') ? SECTOR_H : SECTOR_SZ;
+  const sPerRow = Math.ceil(MAP_ROWS / secH);
+  const sPerCol = Math.ceil(MAP_COLS / secW);
   for (let sr = 0; sr < sPerRow; sr++) {
     for (let sc = 0; sc < sPerCol; sc++) {
       const box    = document.createElement('div');
       box.className = 'sector-box';
-      const startR = sr * SECTOR_SZ, startC = sc * SECTOR_SZ;
-      const endR   = Math.min(startR + SECTOR_SZ, MAP_ROWS);
-      const endC   = Math.min(startC + SECTOR_SZ, MAP_COLS);
+      const startR = sr * secH, startC = sc * secW;
+      const endR   = Math.min(startR + secH, MAP_ROWS);
+      const endC   = Math.min(startC + secW, MAP_COLS);
       box.style.position = 'absolute';
       box.style.left     = (1*16 + 24 + startC * CELL_PX) + 'px';
       box.style.top      = (1*16 + 24 + startR * CELL_PX) + 'px';

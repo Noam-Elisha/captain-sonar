@@ -1,48 +1,80 @@
 # Admiral Radar – Map definitions
 # Coordinates are 0-indexed (row, col)
-#
-# RULEBOOK: "the map is divided into nine sectors in real-time mode and
-#            four sectors in turn-by-turn mode."
-# This game implements TURN-BY-TURN mode only → 4 sectors (2×2 sector layout).
-# sector_size=8 on a 15×15 map → ceil(15/8)=2 sectors per axis → 2×2 = 4 sectors.
-#   Sector 1: top-left    (rows 0-7,  cols 0-7)
-#   Sector 2: top-right   (rows 0-7,  cols 8-14)
-#   Sector 3: bottom-left (rows 8-14, cols 0-7)
-#   Sector 4: bottom-right(rows 8-14, cols 8-14)
 
 import math
+import random
 
-MAPS = {
-    "alpha": {
-        "name": "Map Alpha",
-        "rows": 15,
-        "cols": 15,
-        "sector_size": 8,   # TBT mode: ceil(15/8)=2 per axis → 2×2 = 4 sectors
-        "islands": [
-            # Top-left sector (rows 0-7, cols 0-7)
-            (2, 1), (3, 1),
-            (1, 7),
-            (6, 2), (7, 2), (7, 3),
-            (7, 6),
-            # Top-right sector (rows 0-7, cols 8-14)
-            (0, 12), (1, 12),
-            (5, 11), (5, 12),
-            # Bottom-left sector (rows 8-14, cols 0-7)
-            (8, 7),
-            (11, 1), (12, 1),
-            (10, 7), (11, 7), (11, 8),
-            # Bottom-right sector (rows 8-14, cols 8-14)
-            (12, 11), (13, 12),
-        ],
-    }
+DEFAULT_SETTINGS = {
+    "rows": 15,
+    "cols": 15,
+    "sector_width": 5,
+    "sector_height": 5,
+    "num_islands": 12,
+    "island_size": 2,
 }
 
 
-def get_sector(row, col, sector_size=8, map_cols=15):
-    """Return 1-indexed TBT sector number for a given (row, col).
-    RULEBOOK: TBT mode uses 4 sectors (2×2 sector layout).
-    Uses ceiling division so sector_size=8 on a 15-wide map gives 2 sectors per axis.
-    """
+def generate_map(settings=None):
+    """Generate a map definition from settings."""
+    s = settings or DEFAULT_SETTINGS
+    rows = s["rows"]
+    cols = s["cols"]
+    sw = s["sector_width"]
+    sh = s["sector_height"]
+
+    # Use pre-defined islands from settings if provided (from lobby preview),
+    # otherwise generate random ones
+    if "islands" in s and s["islands"]:
+        islands = [tuple(p) for p in s["islands"]]
+    else:
+        islands = generate_islands(rows, cols, s.get("num_islands", 12), s.get("island_size", 2))
+
+    return {
+        "name": "Custom Map",
+        "rows": rows,
+        "cols": cols,
+        "sector_width": sw,
+        "sector_height": sh,
+        "sector_size": sw,  # backwards compat
+        "islands": islands,
+    }
+
+
+def generate_islands(rows, cols, num_islands, max_island_size):
+    """Generate random island positions avoiding edges."""
+    island_set = set()
+    max_islands = int(rows * cols * 0.1)
+    num_islands = min(num_islands, max_islands)
+
+    for _ in range(num_islands):
+        attempts = 0
+        while attempts < 50:
+            r = random.randint(1, rows - 2)
+            c = random.randint(1, cols - 2)
+            if (r, c) not in island_set:
+                break
+            attempts += 1
+        else:
+            continue
+
+        size = 1
+        if max_island_size >= 2 and random.random() < 0.15:
+            size = random.randint(2, max_island_size)
+
+        for di in range(size):
+            for dj in range(size):
+                nr, nc = r + di, c + dj
+                if 0 < nr < rows - 1 and 0 < nc < cols - 1:
+                    if size >= 3 and (di in (0, size-1)) and (dj in (0, size-1)):
+                        if random.random() < 0.4:
+                            continue
+                    island_set.add((nr, nc))
+
+    return sorted(island_set)
+
+
+def get_sector(row, col, sector_size=5, map_cols=15):
+    """Return 1-indexed sector number for a given (row, col)."""
     sectors_per_row = math.ceil(map_cols / sector_size)
     sr = row // sector_size
     sc = col // sector_size
@@ -50,7 +82,7 @@ def get_sector(row, col, sector_size=8, map_cols=15):
 
 
 def get_col_labels(n):
-    """Generate A, B, C … Z, AA, AB … column labels."""
+    """Generate A, B, C ... Z, AA, AB ... column labels."""
     labels = []
     for i in range(n):
         if i < 26:

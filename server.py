@@ -8,7 +8,7 @@ import secrets, string
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import game_state as gs
-from maps import get_col_labels, MAPS
+from maps import get_col_labels, generate_map, DEFAULT_SETTINGS
 from bots import CaptainBot, FirstMateBot, EngineerBot, RadioOperatorBot
 from comms import TeamComms
 
@@ -867,7 +867,9 @@ def spectate():
         player_name=name,
         map_rows=map_def["rows"],
         map_cols=map_def["cols"],
-        sector_size=map_def["sector_size"],
+        sector_size=map_def.get("sector_size", map_def.get("sector_width", 5)),
+        sector_width=map_def.get("sector_width", map_def.get("sector_size", 5)),
+        sector_height=map_def.get("sector_height", map_def.get("sector_size", 5)),
         islands=map_def["islands"],
         col_labels=get_col_labels(map_def["cols"]),
     )
@@ -900,7 +902,9 @@ def play():
         role=role,
         map_rows=map_def["rows"],
         map_cols=map_def["cols"],
-        sector_size=map_def["sector_size"],
+        sector_size=map_def.get("sector_size", map_def.get("sector_width", 5)),
+        sector_width=map_def.get("sector_width", map_def.get("sector_size", 5)),
+        sector_height=map_def.get("sector_height", map_def.get("sector_size", 5)),
         islands=map_def["islands"],
         col_labels=get_col_labels(map_def["cols"]),
     )
@@ -1174,6 +1178,43 @@ def on_remove_bot(data):
     _emit_lobby(game_id)
 
 
+@socketio.on("map_settings")
+def on_map_settings(data):
+    """Host updates map settings in the lobby."""
+    game_id = (data.get("game_id") or "").upper()
+    name = data.get("name", "")
+    settings = data.get("settings", {})
+
+    if game_id not in games:
+        return emit("error", {"msg": "Game not found"})
+    g = games[game_id]
+    if g["host"] != name:
+        return emit("error", {"msg": "Only the host can change map settings"})
+    if g["game"] is not None:
+        return emit("error", {"msg": "Cannot change map after game starts"})
+
+    # Validate and normalize
+    rows = int(settings.get("rows", 15))
+    cols = int(settings.get("cols", 15))
+    sw = int(settings.get("sector_width", 5))
+    sh = int(settings.get("sector_height", 5))
+    if rows % sh != 0 or cols % sw != 0:
+        return emit("error", {"msg": "Dimensions must be divisible by sector size"})
+
+    # Store validated settings with proper types
+    validated = {
+        "rows": rows,
+        "cols": cols,
+        "sector_width": sw,
+        "sector_height": sh,
+        "num_islands": int(settings.get("num_islands", 12)),
+        "island_size": int(settings.get("island_size", 2)),
+        "islands": settings.get("islands"),
+    }
+    g["map_settings"] = validated
+    socketio.emit("map_settings_update", {"settings": settings}, room=game_id)
+
+
 @socketio.on("start_game")
 def on_start_game(data):
     game_id = (data.get("game_id") or "").upper()
@@ -1192,7 +1233,9 @@ def on_start_game(data):
     teams_present.sort()
     import random; random.shuffle(teams_present)
 
-    g["game"] = gs.make_game("alpha")
+    map_settings = g.get("map_settings", DEFAULT_SETTINGS)
+    map_def = generate_map(map_settings)
+    g["game"] = gs.make_game(map_def)
     g["game"]["turn_order"] = teams_present
     g["game"]["active_team"] = teams_present[0]  # explicit active team for surface-bonus tracking
     g["game"]["phase"] = "placement"
@@ -1211,11 +1254,13 @@ def on_start_game(data):
 
     socketio.emit("game_started", {
         "map": {
-            "rows":        g["game"]["map"]["rows"],
-            "cols":        g["game"]["map"]["cols"],
-            "sector_size": g["game"]["map"]["sector_size"],
-            "islands":     g["game"]["map"]["islands"],
-            "col_labels":  get_col_labels(g["game"]["map"]["cols"]),
+            "rows":        map_def["rows"],
+            "cols":        map_def["cols"],
+            "sector_width": map_def["sector_width"],
+            "sector_height": map_def["sector_height"],
+            "sector_size": map_def["sector_size"],
+            "islands":     map_def["islands"],
+            "col_labels":  get_col_labels(map_def["cols"]),
         },
         "turn_order": teams_present,
     }, room=game_id)

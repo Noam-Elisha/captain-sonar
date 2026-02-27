@@ -48,7 +48,7 @@ Sonar (interactive): activating FM/captain triggers sonar_query to enemy captain
   The activating team receives the enemy captain's stated info (not server-computed truth).
 """
 
-from maps import get_sector, MAPS
+from maps import get_sector, generate_map, DEFAULT_SETTINGS
 import copy
 
 # ── Engineering board definition ──────────────────────────────────────────────
@@ -228,11 +228,14 @@ def make_submarine(team):
 
 # ── Game State ─────────────────────────────────────────────────────────────────
 
-def make_game(map_key="alpha"):
-    map_def = MAPS[map_key]
+def make_game(map_name_or_def="alpha"):
+    if isinstance(map_name_or_def, dict):
+        map_def = map_name_or_def
+    else:
+        map_def = generate_map(DEFAULT_SETTINGS)
     island_set = set(tuple(p) for p in map_def["islands"])
     return {
-        "map_key":    map_key,
+        "map_key":    map_def.get("name", "custom"),
         "map":        map_def,
         "island_set": island_set,
         "phase":      "placement",   # placement | playing | ended
@@ -988,10 +991,12 @@ def serialize_game(game, perspective_team=None):
         "submarines":    subs,
         "winner":        game["winner"],
         "map": {
-            "rows":        map_def["rows"],
-            "cols":        map_def["cols"],
-            "sector_size": map_def["sector_size"],
-            "islands":     map_def["islands"],
-            "name":        map_def["name"],
+            "rows":         map_def["rows"],
+            "cols":         map_def["cols"],
+            "sector_size":  map_def["sector_size"],
+            "sector_width": map_def.get("sector_width", map_def["sector_size"]),
+            "sector_height": map_def.get("sector_height", map_def["sector_size"]),
+            "islands":      map_def["islands"],
+            "name":         map_def["name"],
         },
     }

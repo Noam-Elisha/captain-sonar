@@ -78,6 +78,8 @@
   const MAP_ROWS  = {{ map_rows }};
   const MAP_COLS  = {{ map_cols }};
   const SECTOR_SZ = {{ sector_size }};
+  const SECTOR_W  = {{ sector_width | default(sector_size) }};
+  const SECTOR_H  = {{ sector_height | default(sector_size) }};
   const ISLANDS   = {{ islands | tojson }};
   const COL_LABELS= {{ col_labels | tojson }};
 </script>
