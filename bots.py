@@ -752,7 +752,10 @@ class FirstMateBot:
                     self.charge_priority = new_priority
 
             if msg.get("human") and msg["type"] == "set_charge_priority":
-                self.charge_priority = msg.get("system")
+                system = msg.get("system")
+                if system:
+                    others = [s for s in self.DEFAULT_PRIORITY if s != system]
+                    self.charge_priority = [system] + others
 
     # ── Outgoing communications ──────────────────────────────────────────────
 
