@@ -733,13 +733,6 @@ def _bot_captain_weapon_action(game_id, g, game, team, cap_player) -> bool:
             _broadcast_game_state(game_id)
             return True
 
-    elif atype == "sonar":
-        ok, msg, events = gs.captain_use_sonar(game, team)
-        if ok:
-            _dispatch_events(game_id, game, events)
-            _broadcast_game_state(game_id)
-            return True
-
     return False
 
 
@@ -1435,23 +1428,6 @@ def on_captain_mine_det(data):
     _check_turn_auto_advance(game_id, game)
 
 
-@socketio.on("captain_sonar")
-def on_captain_sonar(data):
-    """Captain activates sonar (interactive: enemy captain must respond)."""
-    game_id = (data.get("game_id") or "").upper()
-    name    = data.get("name", "")
-    p, game = _get_captain(game_id, name)
-    if not p:
-        return
-
-    ok, msg, events = gs.captain_use_sonar(game, p["team"])
-    if not ok:
-        return emit("error", {"msg": msg})
-
-    _dispatch_events(game_id, game, events)
-    _check_turn_auto_advance(game_id, game)
-
-
 @socketio.on("sonar_respond")
 def on_sonar_respond(data):
     """Enemy captain responds to a sonar query with 2 pieces of info (1 true, 1 false)."""
@@ -1768,4 +1744,4 @@ if __name__ == "__main__":
     import sys
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
     print(f"Starting Admiral Radar server on http://localhost:{port}")
-    socketio.run(app, host="0.0.0.0", port=port, debug=True)
+    socketio.run(app, host="0.0.0.0", port=port)

@@ -79,6 +79,7 @@ h1, h2, h3 { line-height: 1.2; }
 .map-panel  { flex: 1; overflow: auto; position: relative;
   display: flex; align-items: center; justify-content: center; }
 .ctrl-panel {
+  position: relative;
   width: 330px; min-width: 270px; max-width: 420px;
   background: var(--bg-panel);
   border-left: 1px solid var(--border);

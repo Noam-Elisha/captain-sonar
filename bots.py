@@ -604,11 +604,6 @@ class CaptainBot:
             sector = self._best_drone_sector(map_def)
             return ("drone", sector)
 
-        # Use sonar if charged and we don't have exact location
-        if (charge("sonar") >= SYSTEM_MAX_CHARGE["sonar"]
-                and self.enemy_certainty != "exact"):
-            return ("sonar",)
-
         return None
 
     # ── Weapon helpers ───────────────────────────────────────────────────────
@@ -964,14 +959,16 @@ class EngineerBot:
     def describe_mark(direction: str, index: int, board: dict = None) -> str:
         if board is None:
             return f"Marked {direction} node {index}"
-        # Report system availability instead of internal mark details
-        systems = ["torpedo", "mine", "sonar", "drone", "stealth"]
-        available = [s for s in systems if not is_system_blocked(board, s)]
-        blocked = [s for s in systems if is_system_blocked(board, s)]
-        if not blocked:
-            return "All systems operational"
-        if not available:
-            return "All systems blocked — consider surfacing"
-        return f"Systems OK: {', '.join(available)}" + (
-            f" | Blocked: {', '.join(blocked)}" if blocked else ""
-        )
+        # Report which circuit colors are blocked
+        colors = ["red", "green", "yellow"]
+        blocked_colors = []
+        for color in colors:
+            for d_nodes in board.values():
+                if any(n["color"] == color and n["marked"] for n in d_nodes):
+                    blocked_colors.append(color)
+                    break
+        if not blocked_colors:
+            return "All circuits clear"
+        if len(blocked_colors) == 3:
+            return "All circuits blocked — surface!"
+        return f"{', '.join(blocked_colors)} circuits blocked"

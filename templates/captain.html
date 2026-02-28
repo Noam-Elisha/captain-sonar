@@ -21,23 +21,7 @@
   </div>
 </div>
 
-<!-- Sonar respond modal (shown when enemy uses sonar — enemy captain must respond) -->
-<div id="sonar-respond-modal" class="modal hidden">
-  <div class="modal-card" style="max-width:420px;">
-    <h3>📡 Enemy Sonar Detected!</h3>
-    <p style="font-size:.85rem;">Pick <strong>2 items</strong> of different types: <strong>1 true</strong> + <strong>1 false</strong>.</p>
-    <div id="sonar-respond-position" style="text-align:center;font-size:.8rem;color:var(--text-muted);margin:.5rem 0;padding:.4rem;background:rgba(255,255,255,.05);border-radius:4px;"></div>
-    <div id="sonar-picks" style="margin:.6rem 0;">
-      <div id="sonar-pick-row" class="sonar-type-group"></div>
-      <div id="sonar-pick-col" class="sonar-type-group"></div>
-      <div id="sonar-pick-sector" class="sonar-type-group"></div>
-    </div>
-    <div id="sonar-selection-summary" style="text-align:center;font-size:.85rem;min-height:1.4rem;margin:.3rem 0;color:var(--accent);"></div>
-    <div class="modal-btns">
-      <button id="btn-sonar-submit" class="btn-confirm" onclick="submitSonarRespond()" disabled>Submit Response</button>
-    </div>
-  </div>
-</div>
+<!-- Sonar styles -->
 <style>
   .sonar-type-group { margin-bottom:.5rem; }
   .sonar-type-group .sonar-label { font-size:.7rem; color:var(--text-muted); margin-bottom:.2rem; }
@@ -47,6 +31,14 @@
   .sonar-btn:hover { background:rgba(255,255,255,.12); }
   .sonar-btn.selected { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
   .sonar-btn.is-true { box-shadow:inset 0 -2px 0 #4ade80; }
+  #sonar-respond-panel {
+    position: absolute; inset: 0; z-index: 50;
+    background: var(--bg-panel);
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 1.2rem; overflow-y: auto;
+  }
+  #sonar-respond-panel.hidden { display: none; }
+  #sonar-respond-panel h3 { margin: 0 0 .3rem; font-size: .95rem; }
 </style>
 
 <!-- Silent running modal -->
@@ -103,6 +95,20 @@
 
   <!-- RIGHT: controls -->
   <div class="ctrl-panel">
+    <!-- Sonar respond panel (inline, non-modal) -->
+    <div id="sonar-respond-panel" class="hidden">
+      <h3>📡 Enemy Sonar Detected!</h3>
+      <p style="font-size:.8rem;margin:0 0 .4rem;">Pick <strong>2 items</strong> of different types: <strong>1 true</strong> + <strong>1 false</strong>.</p>
+      <div id="sonar-respond-position" style="text-align:center;font-size:.75rem;color:var(--text-muted);margin:.3rem 0;padding:.3rem;background:rgba(255,255,255,.05);border-radius:4px;"></div>
+      <div id="sonar-picks">
+        <div id="sonar-pick-row" class="sonar-type-group"></div>
+        <div id="sonar-pick-col" class="sonar-type-group"></div>
+        <div id="sonar-pick-sector" class="sonar-type-group"></div>
+      </div>
+      <div id="sonar-selection-summary" style="text-align:center;font-size:.8rem;min-height:1.2rem;margin:.2rem 0;color:var(--accent);"></div>
+      <button id="btn-sonar-submit" class="btn-confirm" onclick="submitSonarRespond()" disabled style="margin-top:.5rem;width:100%;">Submit Response</button>
+    </div>
+
     <div class="role-header team-{{ team }}">
       <span class="role-title">🌟 CAPTAIN</span>
       <span class="team-badge">{{ team | upper }} TEAM</span>

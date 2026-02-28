@@ -728,7 +728,9 @@ function openSonarRespond(activatingTeam) {
   }
 
   updateSonarSummary();
-  document.getElementById('sonar-respond-modal').classList.remove('hidden');
+  const panel = document.getElementById('sonar-respond-panel');
+  panel.classList.remove('hidden');
+  panel.scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 function toggleSonarPick(type, val, label) {
@@ -760,18 +762,18 @@ function updateSonarSummary() {
   if (_sonarPicks.length < 2) {
     summary.textContent = `Pick ${2 - _sonarPicks.length} more — 1 true (green underline) + 1 false`;
     summary.style.color = 'var(--text-muted)';
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
     return;
   }
   if (_sonarPicks[0].type === _sonarPicks[1].type) {
     summary.textContent = 'Types must be different!';
     summary.style.color = 'var(--col-red)';
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
     return;
   }
-  summary.textContent = `${_sonarPicks[0].label} & ${_sonarPicks[1].label} — 1 true, 1 false`;
+  summary.textContent = `${_sonarPicks[0].label} & ${_sonarPicks[1].label}`;
   summary.style.color = 'var(--accent)';
-  btn.disabled = false;
+  if (btn) btn.disabled = false;
 }
 
 function submitSonarRespond() {
@@ -788,7 +790,7 @@ function submitSonarRespond() {
     game_id: GAME_ID, name: MY_NAME,
     type1: p1.type, val1, type2: p2.type, val2
   });
-  document.getElementById('sonar-respond-modal').classList.add('hidden');
+  document.getElementById('sonar-respond-panel').classList.add('hidden');
   logEvent(`Sonar response submitted: ${p1.label} & ${p2.label}`);
 }
 
