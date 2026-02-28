@@ -8,7 +8,9 @@
 // GAME_ID, MY_NAME, MY_TEAM, MAP_ROWS, MAP_COLS, SECTOR_SZ, ISLANDS, COL_LABELS
 
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
-const CELL_PX    = 32;
+const MAP_PAD    = 16;
+// Dynamic cell size: fit map in viewport (max 32px, shrink for large maps)
+const CELL_PX    = Math.min(32, Math.floor((window.innerWidth - 300 - MAP_PAD * 2 - 24) / MAP_COLS));
 const ISLAND_SET = new Set(ISLANDS.map(([r,c]) => `${r},${c}`));
 
 let myHealth    = 4;
@@ -179,8 +181,8 @@ function renderMap() {
       const endR   = Math.min(startR + secH, MAP_ROWS);
       const endC   = Math.min(startC + secW, MAP_COLS);
       box.style.position = 'absolute';
-      box.style.left     = (1*16 + 24 + startC * CELL_PX) + 'px';
-      box.style.top      = (1*16 + 24 + startR * CELL_PX) + 'px';
+      box.style.left     = (MAP_PAD + 24 + startC * CELL_PX) + 'px';
+      box.style.top      = (MAP_PAD + 24 + startR * CELL_PX) + 'px';
       box.style.width    = ((endC - startC) * CELL_PX) + 'px';
       box.style.height   = ((endR - startR) * CELL_PX) + 'px';
       const lblEl        = document.createElement('div');

@@ -8,8 +8,9 @@
 // ── Globals (injected by template) ──────────────────────────
 // GAME_ID, MY_NAME, MY_TEAM, MAP_ROWS, MAP_COLS, SECTOR_SZ, ISLANDS, COL_LABELS
 
-const CELL_PX  = 32;
 const MAP_PAD  = 16;
+// Dynamic cell size: fit map in viewport (max 32px, shrink for large maps)
+const CELL_PX  = Math.min(32, Math.floor((window.innerWidth - 300 - MAP_PAD * 2 - 24) / MAP_COLS));
 const ENEMY_TEAM = MY_TEAM === 'blue' ? 'red' : 'blue';
 
 // ── State ────────────────────────────────────────────────────
@@ -98,11 +99,10 @@ socket.on('direction_announced', data => {
 socket.on('surface_announced', data => {
   if (data.team === MY_TEAM) {
     // RULEBOOK: no damage from surfacing; enemy gets 3 bonus turns
+    // Dive is automatic — no manual dive needed
     mySector   = data.sector;
-    isSurfaced = true;
     hasMoved   = true;
     renderHealth();
-    showDiveBtn(true);
     updateLock();
     updateEndTurnBtn();
     logEvent(`You surfaced in sector ${data.sector} — trail cleared, engineering reset. Enemy gets 3 bonus turns!`, 'warning');
@@ -660,97 +660,136 @@ function showToast(msg, isError) {
 }
 
 // ── Sonar respond (enemy captain must answer with 1 true + 1 false) ──────────
+let _sonarPicks = [];  // [{type, val, displayVal}]
+
 function openSonarRespond(activatingTeam) {
-  // Show player's own position as hint (they know their truth)
-  const posEl = document.getElementById('sonar-respond-position');
-  if (posEl && myPosition) {
-    // Always compute sector from current position (matches Python get_sector() logic)
-    const _secW = (typeof SECTOR_W !== 'undefined') ? SECTOR_W : SECTOR_SZ;
-    const _secH = (typeof SECTOR_H !== 'undefined') ? SECTOR_H : SECTOR_SZ;
-    const sectorsPerRow = Math.ceil(MAP_COLS / _secW);
+  _sonarPicks = [];
+  const _secW = (typeof SECTOR_W !== 'undefined') ? SECTOR_W : SECTOR_SZ;
+  const _secH = (typeof SECTOR_H !== 'undefined') ? SECTOR_H : SECTOR_SZ;
+  const sectorsPerRow = Math.ceil(MAP_COLS / _secW);
+  const totalSectors = Math.ceil(MAP_ROWS / _secH) * sectorsPerRow;
+
+  // Compute true values
+  let trueRow = null, trueCol = null, trueSec = null;
+  if (myPosition) {
+    trueRow = myPosition.row + 1;
+    trueCol = myPosition.col + 1;
     const sr = Math.floor(myPosition.row / _secH);
     const sc = Math.floor(myPosition.col / _secW);
-    const secVal = sr * sectorsPerRow + sc + 1;
-    posEl.textContent =
-      `Your position: Row ${myPosition.row + 1} | Col ${COL_LABELS[myPosition.col]} (${myPosition.col + 1}) | Sector ${secVal} (1–4)`;
+    trueSec = sr * sectorsPerRow + sc + 1;
   }
-  // Reset inputs
-  const v1 = document.getElementById('sonar-val1');
-  const v2 = document.getElementById('sonar-val2');
-  if (v1) v1.value = '';
-  if (v2) v2.value = '';
-  updateSonarHint();
+
+  // Show position hint
+  const posEl = document.getElementById('sonar-respond-position');
+  if (posEl && myPosition) {
+    posEl.textContent = `Your position: Row ${trueRow} | Col ${COL_LABELS[myPosition.col]} (${trueCol}) | Sector ${trueSec}`;
+  }
+
+  // Build row buttons
+  const rowGroup = document.getElementById('sonar-pick-row');
+  rowGroup.innerHTML = `<div class="sonar-label">ROW</div><div class="sonar-btns"></div>`;
+  const rowBtns = rowGroup.querySelector('.sonar-btns');
+  for (let r = 1; r <= MAP_ROWS; r++) {
+    const btn = document.createElement('button');
+    btn.className = 'sonar-btn' + (r === trueRow ? ' is-true' : '');
+    btn.textContent = r;
+    btn.dataset.type = 'row';
+    btn.dataset.val = r;
+    btn.onclick = () => toggleSonarPick('row', r, `Row ${r}`);
+    rowBtns.appendChild(btn);
+  }
+
+  // Build col buttons
+  const colGroup = document.getElementById('sonar-pick-col');
+  colGroup.innerHTML = `<div class="sonar-label">COLUMN</div><div class="sonar-btns"></div>`;
+  const colBtns = colGroup.querySelector('.sonar-btns');
+  for (let c = 1; c <= MAP_COLS; c++) {
+    const btn = document.createElement('button');
+    btn.className = 'sonar-btn' + (c === trueCol ? ' is-true' : '');
+    btn.textContent = COL_LABELS[c - 1] || c;
+    btn.dataset.type = 'col';
+    btn.dataset.val = c;
+    btn.onclick = () => toggleSonarPick('col', c, `Col ${COL_LABELS[c - 1] || c}`);
+    colBtns.appendChild(btn);
+  }
+
+  // Build sector buttons
+  const secGroup = document.getElementById('sonar-pick-sector');
+  secGroup.innerHTML = `<div class="sonar-label">SECTOR</div><div class="sonar-btns"></div>`;
+  const secBtns = secGroup.querySelector('.sonar-btns');
+  for (let s = 1; s <= totalSectors; s++) {
+    const btn = document.createElement('button');
+    btn.className = 'sonar-btn' + (s === trueSec ? ' is-true' : '');
+    btn.textContent = s;
+    btn.dataset.type = 'sector';
+    btn.dataset.val = s;
+    btn.onclick = () => toggleSonarPick('sector', s, `Sector ${s}`);
+    secBtns.appendChild(btn);
+  }
+
+  updateSonarSummary();
   document.getElementById('sonar-respond-modal').classList.remove('hidden');
 }
 
-function updateSonarHint() {
-  const type1 = document.getElementById('sonar-type1')?.value;
-  const type2 = document.getElementById('sonar-type2')?.value;
-  const hint  = document.getElementById('sonar-respond-hint');
-  const btn   = document.getElementById('btn-sonar-submit');
-  const inp1  = document.getElementById('sonar-val1');
-  const inp2  = document.getElementById('sonar-val2');
-  const v1    = parseInt(inp1?.value);
-  const v2    = parseInt(inp2?.value);
+function toggleSonarPick(type, val, label) {
+  const idx = _sonarPicks.findIndex(p => p.type === type && p.val === val);
+  if (idx >= 0) {
+    // Deselect
+    _sonarPicks.splice(idx, 1);
+  } else {
+    // If already have a pick of this type, replace it
+    const typeIdx = _sonarPicks.findIndex(p => p.type === type);
+    if (typeIdx >= 0) _sonarPicks.splice(typeIdx, 1);
+    // If already have 2 picks, remove the oldest
+    if (_sonarPicks.length >= 2) _sonarPicks.shift();
+    _sonarPicks.push({type, val, label});
+  }
+  // Update button states
+  document.querySelectorAll('#sonar-picks .sonar-btn').forEach(btn => {
+    const bType = btn.dataset.type;
+    const bVal = parseInt(btn.dataset.val);
+    const picked = _sonarPicks.find(p => p.type === bType && p.val === bVal);
+    btn.classList.toggle('selected', !!picked);
+  });
+  updateSonarSummary();
+}
 
-  if (!hint || !btn) return;
-
-  // Update max attribute on inputs based on current type selection
-  const typeMax = {row: MAP_ROWS, col: MAP_COLS, sector: 4};
-  if (inp1) inp1.max = typeMax[type1] || MAP_ROWS;
-  if (inp2) inp2.max = typeMax[type2] || MAP_ROWS;
-
-  if (type1 === type2) {
-    hint.textContent = '⚠ Types must be different!';
-    hint.style.color = 'var(--col-red)';
+function updateSonarSummary() {
+  const summary = document.getElementById('sonar-selection-summary');
+  const btn = document.getElementById('btn-sonar-submit');
+  if (_sonarPicks.length < 2) {
+    summary.textContent = `Pick ${2 - _sonarPicks.length} more — 1 true (green underline) + 1 false`;
+    summary.style.color = 'var(--text-muted)';
     btn.disabled = true;
     return;
   }
-  if (isNaN(v1) || isNaN(v2)) {
-    hint.textContent = 'Enter both values to continue.';
-    hint.style.color = 'var(--text-muted)';
+  if (_sonarPicks[0].type === _sonarPicks[1].type) {
+    summary.textContent = 'Types must be different!';
+    summary.style.color = 'var(--col-red)';
     btn.disabled = true;
     return;
   }
-  // Validate ranges (display values: rows/cols are 1-based, sectors are 1-4)
-  const maxV1 = typeMax[type1] || MAP_ROWS;
-  const maxV2 = typeMax[type2] || MAP_ROWS;
-  if (v1 < 1 || v1 > maxV1) {
-    hint.textContent = `⚠ Info 1 out of range (1–${maxV1})`;
-    hint.style.color = 'var(--col-red)';
-    btn.disabled = true;
-    return;
-  }
-  if (v2 < 1 || v2 > maxV2) {
-    hint.textContent = `⚠ Info 2 out of range (1–${maxV2})`;
-    hint.style.color = 'var(--col-red)';
-    btn.disabled = true;
-    return;
-  }
-  hint.textContent = 'Remember: exactly 1 must be true, 1 must be false.';
-  hint.style.color = 'var(--accent)';
+  summary.textContent = `${_sonarPicks[0].label} & ${_sonarPicks[1].label} — 1 true, 1 false`;
+  summary.style.color = 'var(--accent)';
   btn.disabled = false;
 }
 
 function submitSonarRespond() {
-  const type1 = document.getElementById('sonar-type1')?.value;
-  const type2 = document.getElementById('sonar-type2')?.value;
-  let val1 = parseInt(document.getElementById('sonar-val1')?.value);
-  let val2 = parseInt(document.getElementById('sonar-val2')?.value);
-
-  if (type1 === type2) { showToast('Types must be different!', true); return; }
-  if (isNaN(val1) || isNaN(val2)) { showToast('Enter both values!', true); return; }
+  if (_sonarPicks.length !== 2) return;
+  const p1 = _sonarPicks[0], p2 = _sonarPicks[1];
+  if (p1.type === p2.type) { showToast('Types must be different!', true); return; }
 
   // Convert display values to 0-indexed for row/col
-  if (type1 === 'row' || type1 === 'col') val1 = val1 - 1;
-  if (type2 === 'row' || type2 === 'col') val2 = val2 - 1;
+  let val1 = p1.val, val2 = p2.val;
+  if (p1.type === 'row' || p1.type === 'col') val1 = val1 - 1;
+  if (p2.type === 'row' || p2.type === 'col') val2 = val2 - 1;
 
   socket.emit('sonar_respond', {
     game_id: GAME_ID, name: MY_NAME,
-    type1, val1, type2, val2
+    type1: p1.type, val1, type2: p2.type, val2
   });
   document.getElementById('sonar-respond-modal').classList.add('hidden');
-  logEvent(`📡 Sonar response submitted: ${formatSonarLabel(type1, val1)} & ${formatSonarLabel(type2, val2)}`);
+  logEvent(`Sonar response submitted: ${p1.label} & ${p2.label}`);
 }
 
 function formatSonarLabel(type, val) {

@@ -22,7 +22,7 @@ from collections import Counter
 from maps import get_sector
 from game_state import (
     ENGINEERING_LAYOUT, CIRCUITS, RADIATION_NODES, SYSTEM_MAX_CHARGE,
-    SYSTEM_COLORS, direction_delta, get_available_nodes,
+    SYSTEM_COLORS, direction_delta, get_available_nodes, is_system_blocked,
 )
 
 DIRECTIONS = ["north", "south", "east", "west"]
@@ -138,18 +138,22 @@ class RadioOperatorBot:
 
     def generate_report(self, comms) -> str:
         """Generate and send position report to captain via TeamComms.
-        Returns the summary string for logging/chat."""
+        Returns the summary string for chat, or empty string if not worth chatting."""
         if not self.initialized:
-            return "Radio operator not yet initialized"
+            return ""
 
         report = self._compute_position_report()
+        # Always send internal comms data to captain (for bot decision-making)
         comms.ro_report_enemy_position(
             possible_positions=report["positions_sample"],
             certainty=report["certainty"],
             summary=report["summary"],
             best_guess=report["best_guess"],
         )
-        return report["summary"]
+        # Only chat when there's useful info (count<=30 = decent confidence)
+        if report["count"] <= 30:
+            return report["summary"]
+        return ""
 
     # ── Position tracking internals ──────────────────────────────────────────
 
@@ -957,5 +961,17 @@ class EngineerBot:
         return available[0]
 
     @staticmethod
-    def describe_mark(direction: str, index: int) -> str:
-        return f"Marked {direction} node {index}"
+    def describe_mark(direction: str, index: int, board: dict = None) -> str:
+        if board is None:
+            return f"Marked {direction} node {index}"
+        # Report system availability instead of internal mark details
+        systems = ["torpedo", "mine", "sonar", "drone", "stealth"]
+        available = [s for s in systems if not is_system_blocked(board, s)]
+        blocked = [s for s in systems if is_system_blocked(board, s)]
+        if not blocked:
+            return "All systems operational"
+        if not available:
+            return "All systems blocked — consider surfacing"
+        return f"Systems OK: {', '.join(available)}" + (
+            f" | Blocked: {', '.join(blocked)}" if blocked else ""
+        )

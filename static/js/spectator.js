@@ -5,8 +5,10 @@
    ============================================================ */
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const CELL_PX   = 32;
 const MAP_LABEL = 24;
+const MAP_PAD   = 16;
+// Dynamic cell size: fit map in viewport (max 32px, shrink for large maps)
+const CELL_PX   = Math.min(32, Math.floor((window.innerWidth - 300 - MAP_PAD * 2 - MAP_LABEL) / MAP_COLS));
 const ISLAND_SET = new Set(ISLANDS.map(([r, c]) => `${r},${c}`));
 
 const SYSTEM_MAX    = { torpedo: 3, mine: 3, sonar: 3, drone: 4, stealth: 5 };
@@ -400,8 +402,8 @@ function renderMap() {
       const endR   = Math.min(startR + secH, MAP_ROWS);
       const endC   = Math.min(startC + secW, MAP_COLS);
       box.style.cssText = `position:absolute;`
-        + `left:${MAP_LABEL + startC * CELL_PX}px;`
-        + `top:${MAP_LABEL + startR * CELL_PX}px;`
+        + `left:${MAP_PAD + MAP_LABEL + startC * CELL_PX}px;`
+        + `top:${MAP_PAD + MAP_LABEL + startR * CELL_PX}px;`
         + `width:${(endC - startC) * CELL_PX}px;`
         + `height:${(endR - startR) * CELL_PX}px;`;
       const lblEl        = document.createElement('div');
@@ -412,8 +414,8 @@ function renderMap() {
     }
   }
 
-  const totalW = MAP_LABEL + MAP_COLS * CELL_PX;
-  const totalH = MAP_LABEL + MAP_ROWS * CELL_PX;
+  const totalW = MAP_PAD + MAP_LABEL + MAP_COLS * CELL_PX;
+  const totalH = MAP_PAD + MAP_LABEL + MAP_ROWS * CELL_PX;
 
   const svg = document.getElementById('spec-svg');
   if (svg) { svg.setAttribute('width', totalW); svg.setAttribute('height', totalH); }
@@ -437,8 +439,8 @@ function initROCanvases(w, h) {
 // ── SVG overlay for submarines, trails, mines ──────────────────────────────────
 function cellCenter(row, col) {
   return {
-    x: MAP_LABEL + col * CELL_PX + CELL_PX / 2,
-    y: MAP_LABEL + row * CELL_PX + CELL_PX / 2,
+    x: MAP_PAD + MAP_LABEL + col * CELL_PX + CELL_PX / 2,
+    y: MAP_PAD + MAP_LABEL + row * CELL_PX + CELL_PX / 2,
   };
 }
 
@@ -490,13 +492,15 @@ function drawTrail(svg, ns, trail, color, opacity) {
 }
 
 function drawSub(svg, ns, x, y, fillColor, glowColor) {
+  const subR = Math.max(4, Math.floor(CELL_PX * 0.35));
+  const glowR = Math.max(6, Math.floor(CELL_PX * 0.55));
   const glow = document.createElementNS(ns, 'circle');
-  glow.setAttribute('cx', x); glow.setAttribute('cy', y); glow.setAttribute('r', 15);
+  glow.setAttribute('cx', x); glow.setAttribute('cy', y); glow.setAttribute('r', glowR);
   glow.setAttribute('fill', fillColor); glow.setAttribute('fill-opacity', '0.18');
   svg.appendChild(glow);
 
   const c = document.createElementNS(ns, 'circle');
-  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 9);
+  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', subR);
   c.setAttribute('fill', fillColor); c.setAttribute('stroke', '#fff'); c.setAttribute('stroke-width', '2');
   svg.appendChild(c);
 

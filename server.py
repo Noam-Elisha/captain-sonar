@@ -74,6 +74,7 @@ def _lobby_state(game_id):
         "players":    players,
         "spectators": spectators,
         "phase":      "lobby" if g["game"] is None else g["game"]["phase"],
+        "map_settings": g.get("map_settings"),
     }
 
 
@@ -445,10 +446,11 @@ def _process_bot_comms_pre_turn(game_id: str, team: str):
         msgs = comms.read_inbox("radio_operator")
         ro["bot"].process_inbox(msgs)
         summary = ro["bot"].generate_report(comms)
-        _emit_bot_chat_team_only(game_id, team, {
-            "team": team, "role": "radio_operator", "name": ro["name"],
-            "msg": summary,
-        })
+        if summary:  # Only chat when RO has useful info
+            _emit_bot_chat_team_only(game_id, team, {
+                "team": team, "role": "radio_operator", "name": ro["name"],
+                "msg": summary,
+            })
 
     # 2. FM reports current system status to captain
     fm = _get_bot_for_role(game_id, team, "first_mate")
@@ -768,7 +770,7 @@ def _bot_engineer_action(game_id, g, game, team, eng_player) -> bool:
                            {"board": board})
         _dispatch_events(game_id, game, events)
         _broadcast_game_state(game_id)
-        desc = bot.describe_mark(direction, index)
+        desc = bot.describe_mark(direction, index, board)
         _emit_bot_chat_team_only(game_id, team, {
             "team": team, "role": "engineer", "name": eng_player["name"],
             "msg": desc,
@@ -1349,6 +1351,13 @@ def on_captain_surface(data):
         return emit("error", {"msg": msg})
 
     _dispatch_events(game_id, game, events)
+
+    # Auto-dive: surfacing clears trail+board, dive is automatic
+    ok2, msg2 = gs.captain_dive(game, p["team"])
+    if ok2:
+        emit("dive_ack", {})
+        socketio.emit("dive_announced", {"team": p["team"]}, room=game_id)
+
     _check_turn_auto_advance(game_id, game)
 
 
@@ -1739,12 +1748,15 @@ def _check_turn_auto_advance(game_id, game):
         team = gs.current_team(game)
         sub = game["submarines"][team]
         if not sub["surfaced"] and not gs.has_valid_move(game, team):
-            # Force surface (blackout)
+            # Force surface (blackout) + auto-dive
             ok, msg, events = gs.captain_surface(game, team)
             if ok:
                 socketio.emit("blackout_announced",
                               {"team": team, "msg": "No valid moves — surfacing!"}, room=game_id)
                 _dispatch_events(game_id, game, events)
+                ok2, _ = gs.captain_dive(game, team)
+                if ok2:
+                    socketio.emit("dive_announced", {"team": team}, room=game_id)
 
     _broadcast_game_state(game_id)
     _schedule_bots(game_id)
@@ -1753,5 +1765,7 @@ def _check_turn_auto_advance(game_id, game):
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("Starting Admiral Radar server on http://localhost:5000")
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    import sys
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
+    print(f"Starting Admiral Radar server on http://localhost:{port}")
+    socketio.run(app, host="0.0.0.0", port=port, debug=True)

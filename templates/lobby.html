@@ -181,7 +181,16 @@
     <button class="btn-leave-spec" onclick="leaveSpectator()">← Join as Player Instead</button>
   </div>
 
-  <!-- Map Editor (host only) -->
+  <!-- Map Preview (visible to all) -->
+  <div class="map-editor" id="map-preview-section">
+    <h2>MAP PREVIEW</h2>
+    <div class="map-preview-container">
+      <canvas id="map-preview" width="300" height="300"></canvas>
+      <div id="map-info" style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:.3rem;"></div>
+    </div>
+  </div>
+
+  <!-- Map Controls (host only) -->
   <div class="map-editor" id="map-editor" style="display:none">
     <h2>MAP SETTINGS</h2>
     <div class="map-controls">
@@ -210,9 +219,6 @@
         <input type="range" id="sl-isz" min="1" max="5" value="2">
       </div>
       <button class="btn-shuffle" onclick="shuffleIslands()">Shuffle Islands</button>
-    </div>
-    <div class="map-preview-container">
-      <canvas id="map-preview" width="300" height="300"></canvas>
     </div>
   </div>
 
@@ -266,6 +272,12 @@
     // Check if I became a spectator
     if (lobbySpectators.some(s => s.name === MY_NAME)) {
       isSpectator = true;
+    }
+    // Sync map preview from host's settings (for late joiners / non-hosts)
+    if (data.map_settings && !isHost) {
+      mapSettings = data.map_settings;
+      previewIslands = (data.map_settings.islands || []);
+      drawMapPreview();
     }
     renderLobby();
   });
@@ -375,7 +387,7 @@
     renderBotPanel('blue', blue);
     renderBotPanel('red',  red);
 
-    // Show map editor for host
+    // Show map controls for host only; preview is always visible
     const mapEditor = document.getElementById('map-editor');
     if (mapEditor) {
       mapEditor.style.display = isHost ? '' : 'none';
@@ -623,6 +635,13 @@
     previewIslands.forEach(([r, c]) => {
       ctx.fillRect(c * cell + 1, r * cell + 1, cell - 2, cell - 2);
     });
+
+    // Update info line
+    const sectorsPerRow = Math.ceil(cols / sector_width);
+    const sectorsPerCol = Math.ceil(rows / sector_height);
+    const totalSectors = sectorsPerRow * sectorsPerCol;
+    const info = document.getElementById('map-info');
+    if (info) info.textContent = `${rows}x${cols} grid | ${totalSectors} sectors | ${previewIslands.length} islands`;
   }
 
   function emitMapSettings() {
